@@ -952,6 +952,35 @@ class Block(nn.Module):
             x = x + self.mlp(norm(x))
         return x
 
+# ----------------------
+# Tread Router
+
+class Router:
+    def __init__(self, seed=42):
+        self.seed = seed
+        
+    def get_mask(self, x, selection_rate=0.0):
+        batch_size, num_patches, _ = x.shape
+        device = x.device
+        num_mask = int(num_patches * selection_rate)
+        num_keep = num_patches - num_mask
+        noise_random = torch.rand(batch_size, num_patches, device=device)
+        ids_shuffle = torch.argsort(noise_random, dim=1)
+        ids_keep = ids_shuffle[:, :num_keep]
+        return ids_keep
+    
+    def start_route(self, x, ids_keep):
+        x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
+        return x_masked
+    
+    def end_route(self, masked_x, ids_keep, original_x):
+        # (jerry) scatter is out-of-place, so this is safe
+        x_unmasked = original_x.scatter(
+            1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
+        )
+        return x_unmasked
+
+
 # -----------------------------------------------------------------------------
 # The main model
 
@@ -1004,6 +1033,7 @@ class GPT(nn.Module):
             param.lr_mul = 75.
         self.lm_head.weight.lr_mul = 1.0
         self.scalars.lr_mul = 5.0
+        self.router = Router()
 
     def forward(self, input_seq: Tensor, target_seq: Tensor, seqlens: Tensor, ws_short: int, ws_long: int):
         assert input_seq.ndim == 1
@@ -1049,6 +1079,12 @@ class GPT(nn.Module):
                 sin=self.yarn.sin,
                 attn_scale=self.yarn.attn_scale
             )
+            if self.training:
+                if i == 4:
+                    router_mask = self.router.get_mask(x, 0.5)
+                    x = self.router.start_route(x, router_mask)
+                elif i == len(self.blocks) - 4:
+                    x = self.router.end_route(x)
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
