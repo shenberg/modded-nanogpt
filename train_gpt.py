@@ -1088,7 +1088,7 @@ class GPT(nn.Module):
                     x0 = self.router.start_route(x0, router_mask)
                 elif i == len(self.blocks) - 4:
                     x = self.router.end_route(x, router_mask, x_orig)
-                    x_backout = self.router.end_route(x_backout, router_mask, x_orig)
+                    # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
                     x0 = x0_orig
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
