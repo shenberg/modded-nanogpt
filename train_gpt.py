@@ -1067,7 +1067,7 @@ class GPT(nn.Module):
         n = len(self.blocks) // 2
 
         x_backout = None
-        backout_layer = 3 # TODO
+        backout_layer = 8
         # skip layer zero
         for i in range(1,len(self.blocks)):
             attn_args = AttnArgs(
@@ -1082,11 +1082,13 @@ class GPT(nn.Module):
             if self.training:
                 if i == 4:
                     router_mask = self.router.get_mask(x, 0.5)
+                    x_orig = x
                     x = self.router.start_route(x, router_mask)
                     x0_orig = x0
                     x0 = self.router.start_route(x0, router_mask)
                 elif i == len(self.blocks) - 4:
-                    x = self.router.end_route(x, router_mask)
+                    x = self.router.end_route(x, router_mask, x_orig)
+                    x_backout = self.router.end_route(x_backout, router_mask, x_orig)
                     x0 = x0_orig
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
