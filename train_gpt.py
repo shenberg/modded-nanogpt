@@ -1078,16 +1078,11 @@ class GPT(nn.Module):
                     x = self.router.start_route(x, router_mask)
                     x0_orig = x0
                     x0 = self.router.start_route(x0, router_mask)
-                    cos_orig, sin_orig = self.yarn.cos, self.yarn.sin
-                    self.yarn.cos = self.router.start_route(cos_orig, router_mask)
-                    self.yarn.sin = self.router.start_route(sin_orig, router_mask)
                 elif i == len(self.blocks) - 4:
                     x = self.router.end_route(x, router_mask, x_orig)
                     router_mask = None
                     # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
                     x0 = x0_orig
-                    self.yarn.cos = cos_orig
-                    self.yarn.sin = sin_orig
             if router_mask is not None:
                 cos = self.yarn.cos[router_mask[0]]
                 sin = self.yarn.sin[router_mask[0]]
