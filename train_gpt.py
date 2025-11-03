@@ -1070,6 +1070,22 @@ class GPT(nn.Module):
         backout_layer = 8
         # skip layer zero
         for i in range(1,len(self.blocks)):
+            if self.training:
+                if i == 4:
+                    router_mask = self.router.get_mask(x, 0.5)
+                    x_orig = x
+                    x = self.router.start_route(x, router_mask)
+                    x0_orig = x0
+                    x0 = self.router.start_route(x0, router_mask)
+                    cos_orig, sin_orig = self.yarn.cos, self.yarn.sin
+                    self.yarn.cos = self.router.start_route(cos_orig, router_mask)
+                    self.yarn.sin = self.router.start_route(sin_orig, router_mask)
+                elif i == len(self.blocks) - 4:
+                    x = self.router.end_route(x, router_mask, x_orig)
+                    # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
+                    x0 = x0_orig
+                    self.yarn.cos = cos_orig
+                    self.yarn.sin = sin_orig
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
@@ -1079,17 +1095,6 @@ class GPT(nn.Module):
                 sin=self.yarn.sin,
                 attn_scale=self.yarn.attn_scale
             )
-            if self.training:
-                if i == 4:
-                    router_mask = self.router.get_mask(x, 0.5)
-                    x_orig = x
-                    x = self.router.start_route(x, router_mask)
-                    x0_orig = x0
-                    x0 = self.router.start_route(x0, router_mask)
-                elif i == len(self.blocks) - 4:
-                    x = self.router.end_route(x, router_mask, x_orig)
-                    # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
-                    x0 = x0_orig
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
