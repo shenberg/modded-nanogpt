@@ -1068,6 +1068,7 @@ class GPT(nn.Module):
 
         x_backout = None
         backout_layer = 8
+        router_mask = None
         # skip layer zero
         for i in range(1,len(self.blocks)):
             if self.training:
@@ -1082,17 +1083,24 @@ class GPT(nn.Module):
                     self.yarn.sin = self.router.start_route(sin_orig, router_mask)
                 elif i == len(self.blocks) - 4:
                     x = self.router.end_route(x, router_mask, x_orig)
+                    router_mask = None
                     # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
                     x0 = x0_orig
                     self.yarn.cos = cos_orig
                     self.yarn.sin = sin_orig
+            if router_mask is not None:
+                cos = self.yarn.cos[router_mask[0]]
+                sin = self.yarn.sin[router_mask[0]]
+            else:
+                cos = self.yarn.cos
+                sin = self.yarn.sin
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
                 seqlens=seqlens,
                 bm_size=bm_sizes[i],
-                cos=self.yarn.cos,
-                sin=self.yarn.sin,
+                cos=cos,
+                sin=sin,
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
