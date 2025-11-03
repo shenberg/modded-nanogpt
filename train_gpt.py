@@ -967,6 +967,10 @@ class Router:
         noise_random = torch.rand(batch_size, num_patches, device=device)
         ids_shuffle = torch.argsort(noise_random, dim=1)
         ids_keep = ids_shuffle[:, :num_keep]
+        # TODO: hack for testing till we fix RoPE - drop the same tokens
+        #       in all batch items so we don't need to have different
+        #       sin/cos vectors per batch item
+        ids_keep[:] = ids_keep[0:1]
         return ids_keep
     
     def start_route(self, x, ids_keep):
