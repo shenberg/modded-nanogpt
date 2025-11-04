@@ -959,19 +959,92 @@ class Router:
     def __init__(self, seed=42):
         self.seed = seed
         
-    def get_mask(self, x, selection_rate=0.0):
-        batch_size, num_patches, _ = x.shape
-        device = x.device
-        num_mask = int(num_patches * selection_rate)
-        num_keep = num_patches - num_mask
-        noise_random = torch.rand(batch_size, num_patches, device=device)
-        ids_shuffle = torch.argsort(noise_random, dim=1)
-        ids_keep = ids_shuffle[:, :num_keep]
-        # TODO: hack for testing till we fix RoPE - drop the same tokens
-        #       in all batch items so we don't need to have different
-        #       sin/cos vectors per batch item
-        ids_keep[:] = ids_keep[0:1]
-        return ids_keep
+    # def get_mask(self, x, selection_rate=0.0):
+    #     batch_size, num_patches, _ = x.shape
+    #     device = x.device
+    #     num_mask = int(num_patches * selection_rate)
+    #     num_keep = num_patches - num_mask
+    #     noise_random = torch.rand(batch_size, num_patches, device=device)
+    #     ids_shuffle = torch.argsort(noise_random, dim=1)
+    #     ids_keep = ids_shuffle[:, :num_keep]
+    #     # TODO: hack for testing till we fix RoPE - drop the same tokens
+    #     #       in all batch items so we don't need to have different
+    #     #       sin/cos vectors per batch item
+    #     ids_keep[:] = ids_keep[0:1]
+    #     return ids_keep
+    def random_half_per_sequence(self, x, seqlens: torch.Tensor, *, generator=None):
+        """
+        Vectorized CUDA implementation:
+        Randomly keeps exactly half of total tokens, roughly half per sequence.
+        seqlens: (B,) LongTensor of inclusive end indices into packed tensor.
+        Returns:
+            ids_to_keep (LongTensor of len L//2, sorted ascending)
+            new_seqlens (LongTensor of len B, inclusive end indices)
+        """
+        device = seqlens.device
+        dtype = seqlens.dtype
+        B = seqlens.numel()
+        L = x.shape[1]
+        assert x.shape[0] == 1, "dealing only with batch size 1"
+
+        # 1) Compute starts and lengths
+        starts = torch.empty_like(seqlens)
+        starts[0] = 0
+        if B > 1:
+            starts[1:] = seqlens[:-1]
+        lengths = seqlens - starts
+
+        # 2) Half counts per sequence + rounding fix to make total = L//2
+        keep_counts = lengths // 2
+        deficit = (L // 2) - keep_counts.sum()
+        if deficit > 0:
+            # randomly add one more token to some sequences
+            idx = torch.randperm(B, device=device, generator=generator)[:deficit]
+            keep_counts[idx] += 1
+
+        # 3) Random key for each token
+        pos = torch.arange(L, device=device, dtype=dtype)
+        seq_idx = torch.searchsorted(seqlens - 1, pos, right=False)
+        rand_keys = torch.rand(L, device=device, generator=generator)
+
+        # 4) Sort tokens by (seq_idx, rand_keys)
+        # we build a sortable float key that groups by seq_idx then random order inside
+        # multiply by a large constant >1 ensures lexicographic grouping
+        lex_keys = seq_idx.to(torch.float32) * (L + 1) + rand_keys
+        _, perm = torch.sort(lex_keys)
+
+
+        # Now we want to mark first keep_counts[i] tokens in each contiguous block [seq_start[i], seq_start[i]+lengths[i])
+        # Vectorized way:
+        # build an array of size L with 1s at start positions and -1 at (start+keep_count)
+        mark = torch.zeros(L + 1, device=device, dtype=torch.int8)
+        ends_perm = starts + keep_counts
+        mark[starts] += 1
+        mark[ends_perm] -= 1
+        keep_prefix = torch.cumsum(mark[:-1], dim=0)
+        keep_mask_in_sorted = keep_prefix > 0
+
+        # 6) Map keep mask back to original order
+        # keep_mask = torch.zeros(L, device=device, dtype=torch.bool)
+        # keep_mask[perm] = keep_mask_in_sorted
+
+        # 7) Get kept indices and update seqlens
+        # ids_to_keep = pos[keep_mask]
+        ids_to_keep = perm[keep_mask_in_sorted]
+        ids_to_keep, _ = torch.sort(ids_to_keep)
+        #ids_to_keep = ids_to_keep[: L // 2]  # clip safety
+
+        # kept_seq_idx = seq_idx[keep_mask]
+        # new_counts = torch.bincount(kept_seq_idx, minlength=B).to(dtype)
+        # new_seqlens = torch.cumsum(new_counts, dim=0) - 1
+        new_seqlens = torch.cumsum(keep_counts, dim=0)
+
+        return ids_to_keep, new_seqlens
+
+    def get_mask(self, x, seqlens, selection_rate=0.5):
+        ids_keep, new_seqlens = self.random_half_per_sequence(x, seqlens)
+        return ids_keep.unsqueeze(0), new_seqlens
+
     
     def start_route(self, x, ids_keep):
         x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
@@ -1077,7 +1150,8 @@ class GPT(nn.Module):
         for i in range(1,len(self.blocks)):
             if self.training:
                 if i == 4:
-                    router_mask = self.router.get_mask(x, 0.5)
+                    seqlens_orig = seqlens
+                    router_mask, seqlens = self.router.get_mask(x, seqlens_orig)
                     x_orig = x
                     x = self.router.start_route(x, router_mask)
                     x0_orig = x0
@@ -1087,6 +1161,7 @@ class GPT(nn.Module):
                     router_mask = None
                     # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
                     x0 = x0_orig
+                    seqlens = seqlens_orig
             if router_mask is not None:
                 cos = self.yarn.cos[router_mask[0]]
                 sin = self.yarn.sin[router_mask[0]]
