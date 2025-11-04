@@ -998,9 +998,11 @@ class Router:
         keep_counts = lengths // 2
         deficit = (L // 2) - keep_counts.sum()
         # randomly add one more token to some sequences to pad out back to L // 2
-        idx = torch.randperm(B, device=device, generator=generator)[:deficit]
-        keep_counts[idx] += 1
+        # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
+        # keep_counts[idx] += 1
 
+        idx = torch.randperm(B, device=device, generator=generator)
+        keep_counts[idx < deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
         seq_idx = torch.searchsorted(seqlens - 1, pos, right=False)
