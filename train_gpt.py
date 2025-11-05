@@ -976,10 +976,10 @@ class Router:
         """
         Vectorized CUDA implementation:
         Randomly keeps exactly half of total tokens, roughly half per sequence.
-        seqlens: (B,) LongTensor of inclusive end indices into packed tensor.
+        seqlens: (B,) LongTensor of exclusive end indices into packed tensor.
         Returns:
             ids_to_keep (LongTensor of len L//2, sorted ascending)
-            new_seqlens (LongTensor of len B, inclusive end indices)
+            new_seqlens (LongTensor of len B, exclusive end indices)
         """
         device = seqlens.device
         dtype = seqlens.dtype
@@ -1148,27 +1148,38 @@ class GPT(nn.Module):
         backout_layer = 8
         router_mask = None
         # skip layer zero
-        for i in range(1,len(self.blocks)):
-            if self.training:
-                if i == 4:
-                    seqlens_orig = seqlens
-                    router_mask, seqlens = self.router.get_mask(x, seqlens_orig)
-                    x_orig = x
-                    x = self.router.start_route(x, router_mask)
-                    x0_orig = x0
-                    x0 = self.router.start_route(x0, router_mask)
-                elif i == len(self.blocks) - 4:
-                    x = self.router.end_route(x, router_mask, x_orig)
-                    router_mask = None
-                    # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
-                    x0 = x0_orig
-                    seqlens = seqlens_orig
-            if router_mask is not None:
-                cos = self.yarn.cos[router_mask[0]]
-                sin = self.yarn.sin[router_mask[0]]
-            else:
-                cos = self.yarn.cos
-                sin = self.yarn.sin
+        for i in range(1,4):
+            attn_args = AttnArgs(
+                ve=ve[i],
+                sa_lambdas=sa_lambdas[i],
+                seqlens=seqlens,
+                bm_size=bm_sizes[i],
+                cos=self.yarn.cos,
+                sin=self.yarn.sin,
+                attn_scale=self.yarn.attn_scale
+            )
+            # since layer 0 is skipped, layer 11 does not have skip_connection
+            if i >= n and i<11:
+                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                x = x + gate * skip_connections.pop()
+            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            if i < n:
+                skip_connections.append(x)
+            if i == backout_layer:
+                x_backout = x
+
+        # Start TREAD
+        if self.training:
+            seqlens_orig = seqlens
+            router_mask, seqlens = self.router.get_mask(x, seqlens_orig)
+            x_orig = x
+            x = self.router.start_route(x, router_mask)
+            x0_orig = x0
+            x0 = self.router.start_route(x0, router_mask)
+            cos = self.yarn.cos[router_mask[0]]
+            sin = self.yarn.sin[router_mask[0]]
+
+        for i in range(4,len(self.blocks)-4):
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
@@ -1176,6 +1187,34 @@ class GPT(nn.Module):
                 bm_size=bm_sizes[i],
                 cos=cos,
                 sin=sin,
+                attn_scale=self.yarn.attn_scale
+            )
+            # since layer 0 is skipped, layer 11 does not have skip_connection
+            if i >= n and i<11:
+                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                x = x + gate * skip_connections.pop()
+            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            if i < n:
+                skip_connections.append(x)
+            if i == backout_layer:
+                x_backout = x
+
+        # End TREAD
+        if self.training:
+            x = self.router.end_route(x, router_mask, x_orig)
+            router_mask = None
+            # x_backout = self.router.end_route(x_backout, router_mask, x_orig)
+            x0 = x0_orig
+            seqlens = seqlens_orig
+
+        for i in range(len(self.blocks) - 4, len(self.blocks)):
+            attn_args = AttnArgs(
+                ve=ve[i],
+                sa_lambdas=sa_lambdas[i],
+                seqlens=seqlens,
+                bm_size=bm_sizes[i],
+                cos=self.yarn.cos,
+                sin=self.yarn.sin,
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
