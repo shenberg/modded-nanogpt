@@ -1007,15 +1007,18 @@ class Router:
         # 1) Compute starts and lengths
         starts = torch.empty_like(seqlens)
         starts[0] = 0
-        if B > 1:
-            starts[1:] = seqlens[:-1]
+        starts[1:] = seqlens[:-1]
         lengths = seqlens - starts
 
         # 2) Half counts per sequence + rounding fix to make total = L//2
         keep_counts = lengths // 2
+
+        # deficit = (L // 2) - keep_counts.sum()
+        # make inductor-friendly
+        base_kept = keep_counts.sum().item()
         deficit = (L // 2) - keep_counts.sum()
 
-        # torch._check(deficit >= 0)
+        torch._check(deficit >= 0)
         # randomly add one more token to some sequences to pad out back to L // 2
         # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
         # keep_counts[idx] += 1
