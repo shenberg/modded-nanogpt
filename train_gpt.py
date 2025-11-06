@@ -1063,6 +1063,10 @@ class Router:
     
     def start_route(self, x, ids_keep):
         x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
+        torch._check(x_masked.shape[0] == x.shape[0])
+        torch._check(x_masked.shape[1] == x.shape[1] // 2)
+        torch._check(x_masked.shape[2] == x.shape[2])
+
         return x_masked
     
     def end_route(self, masked_x, ids_keep, original_x):
@@ -1070,6 +1074,7 @@ class Router:
         x_unmasked = original_x.scatter(
             1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
         )
+
         return x_unmasked
 
 
