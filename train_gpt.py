@@ -1042,6 +1042,7 @@ class Router:
         # build an array of size L with 1s at start positions and -1 at (start+keep_count)
         mark = torch.zeros(L + 1, device=device, dtype=torch.int8)
         ends_perm = starts + keep_counts
+        print(mark.shape, starts, keep_counts)
         mark[starts] += 1
         mark[ends_perm] -= 1
         keep_prefix = torch.cumsum(mark[:-1], dim=0)
