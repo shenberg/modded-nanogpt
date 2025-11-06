@@ -1016,7 +1016,7 @@ class Router:
         # deficit = (L // 2) - keep_counts.sum()
         # make inductor-friendly
         base_kept = keep_counts.sum().item()
-        deficit = (L // 2) - keep_counts.sum()
+        deficit = (L // 2) - base_kept
 
         torch._check(deficit >= 0)
         # randomly add one more token to some sequences to pad out back to L // 2
