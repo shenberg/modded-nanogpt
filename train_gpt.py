@@ -1013,10 +1013,8 @@ class Router:
         B = B - empties
 
         # 1) Compute starts and lengths
-        starts = torch.empty_like(seqlens)
-        starts[0] = 0
-        starts[1:] = seqlens[:-1]
-        lengths = seqlens - starts
+        starts = seqlens[:-1]
+        lengths = seqlens[1:] - starts
 
         # 2) Half counts per sequence + rounding fix to make total = L//2
         keep_counts = lengths // 2
@@ -1071,8 +1069,10 @@ class Router:
         # new_counts = torch.bincount(kept_seq_idx, minlength=B).to(dtype)
         # new_seqlens = torch.cumsum(new_counts, dim=0) - 1
         new_seqlens = torch.cumsum(keep_counts, dim=0)
-        new_seqlens = torch.cat([new_seqlens, tail])
-
+        new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
+                                 new_seqlens,
+                                 tail])
+        print(ids_to_keep, new_seqlens)
         return ids_to_keep, new_seqlens
 
     def get_mask(self, x, seqlens, selection_rate=0.5):
@@ -1082,6 +1082,8 @@ class Router:
     
     def start_route(self, x, ids_keep):
         x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
+        print(x.shape)
+
         torch._check(x_masked.shape[0] == x.shape[0])
         torch._check(x_masked.shape[1] == x.shape[1] // 2)
         torch._check(x_masked.shape[2] == x.shape[2])
