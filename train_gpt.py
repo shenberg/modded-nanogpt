@@ -898,9 +898,9 @@ class CausalSelfAttention(nn.Module):
         q, k, v = F.linear(x, self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
 
         # TODO: ugh
-        torch._check(q.size(-1) >= 0)
-        torch._check(k.size(-1) >= 0)
-        torch._check(v.size(-1) >= 0)
+        torch._check(q.size(-1) > 0)
+        torch._check(k.size(-1) > 0)
+        torch._check(v.size(-1) > 0)
 
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
@@ -1003,6 +1003,8 @@ class Router:
         # 2) Half counts per sequence + rounding fix to make total = L//2
         keep_counts = lengths // 2
         deficit = (L // 2) - keep_counts.sum()
+
+        torch._check(deficit >= 0)
         # randomly add one more token to some sequences to pad out back to L // 2
         # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
         # keep_counts[idx] += 1
