@@ -1071,7 +1071,7 @@ class Router:
         # new_counts = torch.bincount(kept_seq_idx, minlength=B).to(dtype)
         # new_seqlens = torch.cumsum(new_counts, dim=0) - 1
         new_seqlens = torch.cumsum(keep_counts, dim=0)
-        new_seqlens = torch.cat([new_seqlens, empties])
+        new_seqlens = torch.cat([new_seqlens, tail])
 
         return ids_to_keep, new_seqlens
 
