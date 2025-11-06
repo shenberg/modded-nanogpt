@@ -1000,14 +1000,14 @@ class Router:
         B = seqlens.numel()
         L = x.shape[1]
         assert x.shape[0] == 1, "dealing only with batch size 1"
-        assert B > 0, "non-empty lists"
-        torch._check(B > 0)
+        assert B > 1, "non-empty lists"
+        torch._check(B > 1)
         torch._check(x.shape[0] == 1)
 
         # TODO: hack for dealing with spare change in the end of the seqlens array
         empties = (seqlens[:-1] == seqlens[1:]).sum().item()
         torch._check(empties >= 0)
-        torch._check(empties < B)
+        torch._check(empties < B - 1)
         tail = seqlens[B - empties :]
         seqlens = seqlens[: B - empties]
         B = B - empties
@@ -1029,7 +1029,7 @@ class Router:
         # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
         # keep_counts[idx] += 1
 
-        idx = torch.randperm(B, device=device, generator=generator)
+        idx = torch.randperm(B - 1, device=device, generator=generator)
         keep_counts[idx < deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
