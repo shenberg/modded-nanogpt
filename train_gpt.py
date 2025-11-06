@@ -1004,6 +1004,13 @@ class Router:
         torch._check(B > 0)
         torch._check(x.shape[0] == 1)
 
+        # TODO: hack for dealing with spare change in the end of the seqlens array
+        empties = (seqlens[:-1] == seqlens[1:]).sum().item()
+        torch._check(empties >= 0)
+        torch._check(empties < B)
+        tail = seqlens[B - empties :]
+        seqlens = seqlens[: B - empties]
+
         # 1) Compute starts and lengths
         starts = torch.empty_like(seqlens)
         starts[0] = 0
@@ -1043,6 +1050,7 @@ class Router:
         mark = torch.zeros(L + 1, device=device, dtype=torch.int8)
         ends_perm = starts + keep_counts
         print(mark.shape, starts, keep_counts)
+        print(seqlens)
         mark[starts] += 1
         mark[ends_perm] -= 1
         keep_prefix = torch.cumsum(mark[:-1], dim=0)
@@ -1062,6 +1070,7 @@ class Router:
         # new_counts = torch.bincount(kept_seq_idx, minlength=B).to(dtype)
         # new_seqlens = torch.cumsum(new_counts, dim=0) - 1
         new_seqlens = torch.cumsum(keep_counts, dim=0)
+        new_seqlens = torch.cat([new_seqlens, empties])
 
         return ids_to_keep, new_seqlens
 
