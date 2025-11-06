@@ -901,6 +901,12 @@ class CausalSelfAttention(nn.Module):
         torch._check(q.size(-1) > 0)
         torch._check(k.size(-1) > 0)
         torch._check(v.size(-1) > 0)
+        torch._check(q.size(-2) > 0)
+        torch._check(k.size(-2) > 0)
+        torch._check(v.size(-2) > 0)
+        torch._check(q.size(-3) > 0)
+        torch._check(k.size(-3) > 0)
+        torch._check(v.size(-3) > 0)
 
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
