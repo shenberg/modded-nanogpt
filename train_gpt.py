@@ -1073,7 +1073,7 @@ class Router:
                                  new_seqlens,
                                  tail])
         print(ids_to_keep, new_seqlens)
-        return ids_to_keep, new_seqlens
+        return ids_to_keep.to(torch.int32), new_seqlens
 
     def get_mask(self, x, seqlens, selection_rate=0.5):
         ids_keep, new_seqlens = self.random_half_per_sequence(x, seqlens)
