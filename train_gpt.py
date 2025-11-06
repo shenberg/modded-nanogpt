@@ -1000,6 +1000,9 @@ class Router:
         B = seqlens.numel()
         L = x.shape[1]
         assert x.shape[0] == 1, "dealing only with batch size 1"
+        assert B > 0, "non-empty lists"
+        torch._check(B > 0)
+        torch._check(x.shape[0] == 1)
 
         # 1) Compute starts and lengths
         starts = torch.empty_like(seqlens)
