@@ -1010,6 +1010,7 @@ class Router:
         torch._check(empties < B)
         tail = seqlens[B - empties :]
         seqlens = seqlens[: B - empties]
+        B = B - empties
 
         # 1) Compute starts and lengths
         starts = torch.empty_like(seqlens)
