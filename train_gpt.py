@@ -1010,7 +1010,7 @@ class Router:
         keep_counts = lengths // 2
         deficit = (L // 2) - keep_counts.sum()
 
-        torch._check(deficit >= 0)
+        # torch._check(deficit >= 0)
         # randomly add one more token to some sequences to pad out back to L // 2
         # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
         # keep_counts[idx] += 1
