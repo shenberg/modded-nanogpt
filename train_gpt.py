@@ -1083,10 +1083,10 @@ class Router:
                                  tail])
         # set tail
         new_seqlens[-B + empties:] = new_seqlens[-B + empties]
-        if torch.any(ids_to_keep >= L // 2):
-            print(ids_to_keep)
-            print(ids_to_keep.max())
-            raise ValueError("Too long!")
+        # if torch.any(ids_to_keep >= L // 2):
+        #     print(ids_to_keep)
+        #     print(ids_to_keep.max())
+        #     raise ValueError("Too long!")
         # print(ids_to_keep, new_seqlens)
         return ids_to_keep, new_seqlens.to(torch.int32)
 
@@ -1237,8 +1237,8 @@ class GPT(nn.Module):
             x = self.router.start_route(x, router_mask)
             x0_orig = x0
             x0 = self.router.start_route(x0, router_mask)
-            cos = self.yarn.cos[router_mask[0]]
-            sin = self.yarn.sin[router_mask[0]]
+            cos = self.yarn.cos[router_mask]
+            sin = self.yarn.sin[router_mask]
 
         for i in range(4,len(self.blocks)-4):
             attn_args = AttnArgs(
