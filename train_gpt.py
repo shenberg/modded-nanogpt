@@ -1034,8 +1034,11 @@ class Router:
         torch._check(size < B)
         # TODO: randperm seems broken on inductor?
         # idx = torch.randperm(size, device=device, generator=generator)
-        idx = torch.argsort(torch.rand(size, device=device, generator=generator))
-        keep_counts[idx < deficit] += 1
+        # TODO: borked too - no support for dynamically sized tensor in torch.rand() too
+        # idx = torch.argsort(torch.rand(size, device=device, generator=generator))
+
+        # keep_counts[idx < deficit] += 1
+        keep_counts[:deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
         seq_idx = torch.searchsorted(seqlens - 1, pos, right=False)
