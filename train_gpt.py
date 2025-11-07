@@ -1038,6 +1038,7 @@ class Router:
         # idx = torch.argsort(torch.rand(size, device=device, generator=generator))
 
         # keep_counts[idx < deficit] += 1
+        torch._check(deficit < size)
         keep_counts[:deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
