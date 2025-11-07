@@ -1038,7 +1038,7 @@ class Router:
         # idx = torch.argsort(torch.rand(size, device=device, generator=generator))
 
         # keep_counts[idx < deficit] += 1
-        torch._check(deficit < size)
+        torch._check(deficit <= size)
         keep_counts[:deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
@@ -1101,8 +1101,8 @@ class Router:
     
     def end_route(self, masked_x, ids_keep, original_x):
         # (jerry) scatter is out-of-place, so this is safe
-        print(masked_x.shape, original_x.shape)
-        print(ids_keep.max())
+        # print(masked_x.shape, original_x.shape)
+        # print(ids_keep.max())
         x_unmasked = original_x.scatter(
             1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
         )
