@@ -1081,6 +1081,12 @@ class Router:
         new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
                                  new_seqlens,
                                  tail])
+        # set tail
+        new_seqlens[-tail:] = new_seqlens[-tail]
+        if torch.any(ids_to_keep >= L // 2):
+            print(ids_to_keep)
+            print(ids_to_keep.max())
+            raise ValueError("Too long!")
         # print(ids_to_keep, new_seqlens)
         return ids_to_keep, new_seqlens.to(torch.int32)
 
