@@ -1012,6 +1012,7 @@ class Router:
         seqlens = seqlens[: B - empties]
         B = B - empties - 1
         torch._check(B > 0)
+        torch._check_is_size(B)
 
         # 1) Compute starts and lengths
         starts = seqlens[:-1]
@@ -1093,6 +1094,8 @@ class Router:
     
     def end_route(self, masked_x, ids_keep, original_x):
         # (jerry) scatter is out-of-place, so this is safe
+        print(masked_x.shape, original_x.shape)
+        print(ids_keep.max())
         x_unmasked = original_x.scatter(
             1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
         )
