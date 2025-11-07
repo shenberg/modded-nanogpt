@@ -1007,10 +1007,11 @@ class Router:
         # TODO: hack for dealing with spare change in the end of the seqlens array
         empties = (seqlens[:-1] == seqlens[1:]).sum().item()
         torch._check(empties >= 0)
-        torch._check(empties < B - 1)
+        torch._check(empties < B - 2)
         tail = seqlens[B - empties :]
         seqlens = seqlens[: B - empties]
-        B = B - empties
+        B = B - empties - 1
+        torch._check(B > 0)
 
         # 1) Compute starts and lengths
         starts = seqlens[:-1]
@@ -1029,7 +1030,7 @@ class Router:
         # idx = torch.randperm(B, device=device, generator=generator)[:deficit]
         # keep_counts[idx] += 1
 
-        idx = torch.randperm(B - 1, device=device, generator=generator)
+        idx = torch.randperm(B, device=device, generator=generator)
         keep_counts[idx < deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
