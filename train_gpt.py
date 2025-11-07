@@ -1082,7 +1082,7 @@ class Router:
                                  new_seqlens,
                                  tail])
         # set tail
-        new_seqlens[-tail:] = new_seqlens[-tail]
+        new_seqlens[-B + empties:] = new_seqlens[-B + empties]
         if torch.any(ids_to_keep >= L // 2):
             print(ids_to_keep)
             print(ids_to_keep.max())
@@ -1092,11 +1092,13 @@ class Router:
 
     def get_mask(self, x, seqlens, selection_rate=0.5):
         ids_keep, new_seqlens = self.random_half_per_sequence(x, seqlens)
-        return ids_keep.unsqueeze(0), new_seqlens
+        # return ids_keep.unsqueeze(0), new_seqlens
+        return ids_keep, new_seqlens
 
     
     def start_route(self, x, ids_keep):
-        x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
+        # x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
+        x_masked = x[:, ids_keep]
         # print(x.shape)
 
         torch._check(x_masked.shape[0] == x.shape[0])
@@ -1109,9 +1111,11 @@ class Router:
         # (jerry) scatter is out-of-place, so this is safe
         # print(masked_x.shape, original_x.shape)
         # print(ids_keep.max())
-        x_unmasked = original_x.scatter(
-            1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
-        )
+        # x_unmasked = original_x.scatter(
+        #     1, ids_keep.unsqueeze(-1).expand(-1, -1, original_x.size(2)), masked_x
+        # )
+        x_unmasked = original_x.copy()
+        x_unmasked[:, ids_keep] = masked_x
 
         return x_unmasked
 
