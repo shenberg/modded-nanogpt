@@ -1032,7 +1032,9 @@ class Router:
         size = keep_counts.shape[0]
         torch._check(size >= 0)
         torch._check(size < B)
-        idx = torch.randperm(size, device=device, generator=generator)
+        # TODO: randperm seems broken on inductor?
+        # idx = torch.randperm(size, device=device, generator=generator)
+        idx = torch.argsort(torch.rand(size, device=device, generator=generator))
         keep_counts[idx < deficit] += 1
         # 3) Random key for each token
         pos = torch.arange(L, device=device, dtype=dtype)
