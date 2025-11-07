@@ -1057,8 +1057,8 @@ class Router:
         # build an array of size L with 1s at start positions and -1 at (start+keep_count)
         mark = torch.zeros(L + 1, device=device, dtype=torch.int8)
         ends_perm = starts + keep_counts
-        print(mark.shape, starts, keep_counts)
-        print(seqlens)
+        # print(mark.shape, starts, keep_counts)
+        # print(seqlens)
         mark[starts] += 1
         mark[ends_perm] -= 1
         keep_prefix = torch.cumsum(mark[:-1], dim=0)
@@ -1081,7 +1081,7 @@ class Router:
         new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
                                  new_seqlens,
                                  tail])
-        print(ids_to_keep, new_seqlens)
+        # print(ids_to_keep, new_seqlens)
         return ids_to_keep, new_seqlens.to(torch.int32)
 
     def get_mask(self, x, seqlens, selection_rate=0.5):
@@ -1091,7 +1091,7 @@ class Router:
     
     def start_route(self, x, ids_keep):
         x_masked = x.gather(1, ids_keep.unsqueeze(-1).expand(-1, -1, x.size(2)))
-        print(x.shape)
+        # print(x.shape)
 
         torch._check(x_masked.shape[0] == x.shape[0])
         torch._check(x_masked.shape[1] == x.shape[1] // 2)
