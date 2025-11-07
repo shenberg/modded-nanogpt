@@ -1117,7 +1117,7 @@ class Router:
         # x_unmasked = original_x.clone()
         # x_unmasked[:, ids_keep] = masked_x
 
-        x_unmasked = original_x.scatter( 1, ids_keep[None, :, None].expand(1,1, original_x.size(2), masked_x))
+        x_unmasked = original_x.scatter( 1, ids_keep[None, :, None].expand(1,1, original_x.size(2)), masked_x)
         return x_unmasked
 
 
