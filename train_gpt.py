@@ -1084,7 +1084,7 @@ class Router:
         #                          new_seqlens,
         #                          tail])
         new_seqlens = seqlens
-        new_seqlens[1:] = ends_perm
+        new_seqlens[1:] = keep_counts.cumsum(dim=0)
         # set tail
         #new_seqlens[B - empties:] = new_seqlens[B - empties]
         # new_seqlens[B - empties:] = L // 2
