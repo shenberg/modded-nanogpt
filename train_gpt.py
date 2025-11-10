@@ -1210,6 +1210,8 @@ class GPT(nn.Module):
         x_backout = None
         backout_layer = 8
         router_mask = None
+        cos = self.yarn.cos
+        sin = self.yarn.sin
         # skip layer zero
         for i in range(1,4):
             attn_args = AttnArgs(
@@ -1217,8 +1219,8 @@ class GPT(nn.Module):
                 sa_lambdas=sa_lambdas[i],
                 seqlens=seqlens,
                 bm_size=bm_sizes[i],
-                cos=self.yarn.cos,
-                sin=self.yarn.sin,
+                cos=cos,
+                sin=sin,
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
@@ -1241,6 +1243,7 @@ class GPT(nn.Module):
             x0 = self.router.start_route(x0, router_mask)
             cos = self.yarn.cos[router_mask]
             sin = self.yarn.sin[router_mask]
+
 
         for i in range(4,len(self.blocks)-4):
             attn_args = AttnArgs(
