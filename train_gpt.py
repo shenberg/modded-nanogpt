@@ -1082,7 +1082,8 @@ class Router:
                                  new_seqlens,
                                  tail])
         # set tail
-        new_seqlens[-B + empties:] = new_seqlens[-B + empties]
+        #new_seqlens[B - empties:] = new_seqlens[B - empties]
+        new_seqlens[B - empties:] = L // 2
         # if torch.any(ids_to_keep >= L // 2):
         #     print(ids_to_keep)
         #     print(ids_to_keep.max())
