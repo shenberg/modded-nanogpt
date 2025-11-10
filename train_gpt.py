@@ -1083,7 +1083,7 @@ class Router:
         # new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
         #                          new_seqlens,
         #                          tail])
-        new_seqlens = seqlens
+        new_seqlens = seqlens.detach()
         new_seqlens[1:] = keep_counts.cumsum(dim=0)
         # set tail
         #new_seqlens[B - empties:] = new_seqlens[B - empties]
