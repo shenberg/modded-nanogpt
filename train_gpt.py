@@ -1212,12 +1212,13 @@ class GPT(nn.Module):
         n = len(self.blocks) // 2
 
         x_backout = None
-        backout_layer = 8
+        # backout_layer = 8
+        backout_layer = 9
         router_mask = None
         cos = self.yarn.cos
         sin = self.yarn.sin
         # skip layer zero
-        for i in range(1,4):
+        for i in range(1,3):
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
@@ -1249,7 +1250,7 @@ class GPT(nn.Module):
             sin = self.yarn.sin[router_mask]
 
 
-        for i in range(4,len(self.blocks)-4):
+        for i in range(3,len(self.blocks)-3):
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
@@ -1277,7 +1278,7 @@ class GPT(nn.Module):
             x0 = x0_orig
             seqlens = seqlens_orig
 
-        for i in range(len(self.blocks) - 4, len(self.blocks)):
+        for i in range(len(self.blocks) - 3, len(self.blocks)):
             attn_args = AttnArgs(
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
