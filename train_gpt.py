@@ -1084,7 +1084,7 @@ class Router:
         #                          new_seqlens,
         #                          tail])
         new_seqlens = seqlens
-        new_seqlens[1:] = keep_counts
+        new_seqlens[1:] = ends_perm
         # set tail
         #new_seqlens[B - empties:] = new_seqlens[B - empties]
         # new_seqlens[B - empties:] = L // 2
@@ -1664,6 +1664,7 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
 train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps)
 for step in range(warmup_steps):
+    print("warmup step ", step)
     inputs, targets, cum_seqlens = next(train_loader)
     # each window size is a new graph, need to warm up each with Yarn.attn_scale
     ws_idx = step % len(args.ws_schedule)
