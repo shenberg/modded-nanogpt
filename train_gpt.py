@@ -1004,13 +1004,14 @@ class Router:
         torch._check(B > 1)
         torch._check(x.shape[0] == 1)
 
-        # TODO: hack for dealing with spare change in the end of the seqlens array
-        empties = (seqlens[:-1] == seqlens[1:]).sum().item()
-        torch._check(empties >= 0)
-        # torch._check(B - empties > 1)
+        # TODO: deal better with the tail
+        # # TODO: hack for dealing with spare change in the end of the seqlens array
+        # empties = (seqlens[:-1] == seqlens[1:]).sum().item()
+        # torch._check(empties >= 0)
+        # # torch._check(B - empties > 1)
 
-        tail = seqlens[B - empties :]
-        seqlens = seqlens[: B - empties]
+        # tail = seqlens[B - empties :]
+        # seqlens = seqlens[: B - empties]
 
         # 1) Compute starts and lengths
         starts = seqlens[:-1]
@@ -1031,7 +1032,7 @@ class Router:
 
         size = keep_counts.shape[0]
         torch._check(size >= 0)
-        torch._check(size < B)
+        # torch._check(size < B)
         # TODO: randperm seems broken on inductor?
         # idx = torch.randperm(size, device=device, generator=generator)
         # TODO: borked too - no support for dynamically sized tensor in torch.rand() too
@@ -1077,13 +1078,16 @@ class Router:
         # kept_seq_idx = seq_idx[keep_mask]
         # new_counts = torch.bincount(kept_seq_idx, minlength=B).to(dtype)
         # new_seqlens = torch.cumsum(new_counts, dim=0) - 1
-        new_seqlens = torch.cumsum(keep_counts, dim=0)
-        new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
-                                 new_seqlens,
-                                 tail])
+        # TODO: hack
+        # new_seqlens = torch.cumsum(keep_counts, dim=0)
+        # new_seqlens = torch.cat([torch.zeros(1, dtype=seqlens.dtype, device=seqlens.device),
+        #                          new_seqlens,
+        #                          tail])
+        new_seqlens = seqlens
+        new_seqlens[1:] = keep_counts
         # set tail
         #new_seqlens[B - empties:] = new_seqlens[B - empties]
-        new_seqlens[B - empties:] = L // 2
+        # new_seqlens[B - empties:] = L // 2
         # if torch.any(ids_to_keep >= L // 2):
         #     print(ids_to_keep)
         #     print(ids_to_keep.max())
