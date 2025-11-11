@@ -775,8 +775,8 @@ class DistAdam(torch.optim.Optimizer):
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the model
-m = (torch.pi / 2 )**0.5
 def norm(x: Tensor):
+    m = (torch.pi / 2 )**0.5
     # return F.rms_norm(x, (x.size(-1),))
     return x / (m * torch.linalg.vector_norm(x, dim=-1, keepdim=True))
 
