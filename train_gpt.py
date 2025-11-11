@@ -1026,6 +1026,7 @@ class GPT(nn.Module):
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
         smear_mask = torch.ones(x.shape[0] - 1, device=x.device, dtype=x.dtype)
         smear_mask[seqlens[1:] - 1] = 0
+        smear_mask = smear_mask[:,None]
         smear_mask *= smear_gate_out
         x = torch.cat([x[:1], x[1:] + smear_mask * x[:-1]])
         x = x0 = norm(x[None])
