@@ -945,10 +945,10 @@ class Block(nn.Module):
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
-    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
+    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs, layer_idx: int):
         x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = x + self.attn(norm(x), attn_args, layer_idx)
         if self.mlp is not None:
             x = x + self.mlp(norm(x))
         return x
