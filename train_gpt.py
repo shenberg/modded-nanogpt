@@ -944,11 +944,14 @@ class Block(nn.Module):
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
-    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
+    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs, is_last : bool):
         x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
+            if is_last:
+                return self.mlp(norm(x))
+
             x = x + self.mlp(norm(x))
         return x
 
@@ -1053,14 +1056,14 @@ class GPT(nn.Module):
             if i >= n and i<11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 x = x + gate * skip_connections.pop()
-            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            x = self.blocks[i](x, x0, lambdas[i], attn_args, i == len(self.blocks) - 1)
             if i < n:
                 skip_connections.append(x)
             if i == backout_layer:
                 x_backout = x
 
         # back out contributions from first 8 layers that are only required for downstream context and not direct prediction
-        x -= backout_lambda * x_backout
+        #x -= backout_lambda * x_backout
         x = norm(x)
         logits = self.lm_head(x)
         # @Grad62304977 added tanh softcapping following Gemma 2 paper, @KoszarskyB reduced it from 30 to 15, @YouJiacheng shifted it by +15 (2*sigmoid(2*x)=tanh(x)+1)
