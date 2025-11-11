@@ -886,7 +886,7 @@ class CausalSelfAttention(nn.Module):
         self.attn_gate.weight.label = 'attn_gate'
         self.attn_gate.weight.detach().zero_()
 
-    def forward(self, x: Tensor, attn_args: AttnArgs, i: int):
+    def forward(self, x: Tensor, attn_args: AttnArgs):
         B, T = x.size(0), x.size(1) # batch size, sequence length
         assert B == 1, "varlen sequences requires B == 1"
         assert T % 16 == 0
