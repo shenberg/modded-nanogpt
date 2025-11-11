@@ -897,8 +897,7 @@ class CausalSelfAttention(nn.Module):
 
         q, k, v = F.linear(x, self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
-        if i % 2 == 1: # RoPE only half the layers
-            q, k = rotary(q, cos, sin), rotary(k, cos, sin)
+        q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
             v = sa_lambdas[0] * v + sa_lambdas[1] * ve.view_as(v) # @ KoszarskyB & @Grad62304977
         else: # skip mid-layers token value embeddings by @YouJiacheng
@@ -945,10 +944,10 @@ class Block(nn.Module):
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
-    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs, layer_idx: int):
+    def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args, layer_idx)
+            x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
             x = x + self.mlp(norm(x))
         return x
@@ -1025,7 +1024,10 @@ class GPT(nn.Module):
         # smear token embed forward 1 position @classiclarryd
         smear_lambda = self.scalars[5 * len(self.blocks)]
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
-        x = torch.cat([x[:1], x[1:] + smear_gate_out * x[:-1]])
+        smear_mask = torch.ones(x.shape[0] - 1, smear_gate_out, device=x.device, dtype=x.dtype)
+        smear_mask[seqlens[1:] - 1] = 0
+        smear_mask *= smear_gate_out
+        x = torch.cat([x[:1], x[1:] + smear_mask * x[:-1]])
         x = x0 = norm(x[None])
 
         # U-net design by @brendanh0gan
@@ -1054,7 +1056,7 @@ class GPT(nn.Module):
             if i >= n and i<11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 x = x + gate * skip_connections.pop()
-            x = self.blocks[i](x, x0, lambdas[i], attn_args, i)
+            x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
                 skip_connections.append(x)
             if i == backout_layer:
