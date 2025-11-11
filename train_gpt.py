@@ -775,10 +775,9 @@ class DistAdam(torch.optim.Optimizer):
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the model
+
 def norm(x: Tensor):
-    m = (torch.pi / 2 )**0.5
-    # return F.rms_norm(x, (x.size(-1),))
-    return x / (m * torch.linalg.vector_norm(x, dim=-1, keepdim=True))
+    return F.rms_norm(x, (x.size(-1),))
 
 class CastedLinear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, use_fp8=False, x_s=1.0, w_s=1.0, grad_s=1.0):
@@ -887,7 +886,7 @@ class CausalSelfAttention(nn.Module):
         self.attn_gate.weight.label = 'attn_gate'
         self.attn_gate.weight.detach().zero_()
 
-    def forward(self, x: Tensor, attn_args: AttnArgs):
+    def forward(self, x: Tensor, attn_args: AttnArgs, i: int):
         B, T = x.size(0), x.size(1) # batch size, sequence length
         assert B == 1, "varlen sequences requires B == 1"
         assert T % 16 == 0
@@ -898,7 +897,8 @@ class CausalSelfAttention(nn.Module):
 
         q, k, v = F.linear(x, self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
-        q, k = rotary(q, cos, sin), rotary(k, cos, sin)
+        if i % 2 == 1: # RoPE only half the layers
+            q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
             v = sa_lambdas[0] * v + sa_lambdas[1] * ve.view_as(v) # @ KoszarskyB & @Grad62304977
         else: # skip mid-layers token value embeddings by @YouJiacheng
@@ -1054,7 +1054,7 @@ class GPT(nn.Module):
             if i >= n and i<11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 x = x + gate * skip_connections.pop()
-            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            x = self.blocks[i](x, x0, lambdas[i], attn_args, i)
             if i < n:
                 skip_connections.append(x)
             if i == backout_layer:
