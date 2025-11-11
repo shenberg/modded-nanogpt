@@ -775,9 +775,10 @@ class DistAdam(torch.optim.Optimizer):
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the model
-
+m = (torch.pi / 2 )**0.5
 def norm(x: Tensor):
-    return F.rms_norm(x, (x.size(-1),))
+    # return F.rms_norm(x, (x.size(-1),))
+    return x / (m * torch.linalg.vector_norm(x, dim=-1, keepdim=True))
 
 class CastedLinear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, use_fp8=False, x_s=1.0, w_s=1.0, grad_s=1.0):
@@ -1050,13 +1051,9 @@ class GPT(nn.Module):
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
-            # if i >= n and i<11:
-            #     gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-            #     x = x + gate * skip_connections.pop()
-            if i == 11:
-                for j, skip in enumerate(skip_connections):
-                    gate = torch.sigmoid(skip_weights[j])  # in (0, 1)
-                    x = x + gate * skip_connections.pop()
+            if i >= n and i<11:
+                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                x = x + gate * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
                 skip_connections.append(x)
