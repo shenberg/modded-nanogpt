@@ -945,11 +945,11 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        x = lambdas[0] * x + lambdas[1] * x0
+        # x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = x + self.attn(norm(lambdas[0] * x + lambdas[1] * x0), attn_args)
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = x + self.mlp(norm(lambdas[2] * x + lambdas[3] * x0))
         return x
 
 # -----------------------------------------------------------------------------
@@ -979,14 +979,14 @@ class GPT(nn.Module):
         self.lm_head.weight.detach().zero_() # @Grad62304977
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
-        pad = (-num_layers * 5 - 2) % dist.get_world_size()
+        pad = (-num_layers * 7 - 2) % dist.get_world_size()
         self.scalars = nn.Parameter(
             torch.cat(
                 [
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.0, 0.0]) for _ in range(num_layers)
+                        torch.tensor([1.0, 0.0, 1.0, 0.0]) for _ in range(num_layers)
                     ],  # block lambdas
                     *[
                         torch.tensor([0.5, 0.5]) for _ in range(num_layers)
@@ -1022,7 +1022,7 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         # smear token embed forward 1 position @classiclarryd
-        smear_lambda = self.scalars[5 * len(self.blocks)]
+        smear_lambda = self.scalars[7 * len(self.blocks)]
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
         x = torch.cat([x[:1], x[1:] + smear_gate_out * x[:-1]])
         x = x0 = norm(x[None])
@@ -1030,9 +1030,9 @@ class GPT(nn.Module):
         # U-net design by @brendanh0gan
         skip_connections = []
         skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
-        sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
-        backout_lambda = self.scalars[5 * len(self.blocks)+1]
+        lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 4)
+        sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
+        backout_lambda = self.scalars[7 * len(self.blocks)+1]
 
         n = len(self.blocks) // 2
 
