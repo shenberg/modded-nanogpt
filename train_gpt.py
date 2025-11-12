@@ -1419,7 +1419,7 @@ def step_optimizers(step: int, optimizers, model):
             optimizer.step()
         model.zero_grad(set_to_none=True)
 
-model: nn.Module = torch.compile(model, dynamic=False, fullgraph=True)
+model: nn.Module = torch.compile(model, dynamic=False, fullgraph=True, backend='eager')
 
 ########################################
 #            Warmup kernels            #
@@ -1507,7 +1507,11 @@ for step in range(train_steps + 1):
     # --------------- TRAINING SECTION -----------------
     for _ in range(grad_accum_steps):
         inputs, targets, cum_seqlens = next(train_loader)
-        model(inputs, targets, cum_seqlens, ws_short, ws_long).backward()
+        #model(inputs, targets, cum_seqlens, ws_short, ws_long).backward()
+        loss = model(inputs, targets, cum_seqlens, ws_short, ws_long)
+        print(loss)
+        loss.backward()
+        del loss
     step_optimizers(step, optimizers, model)
      
     # logging
