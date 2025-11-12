@@ -1024,11 +1024,11 @@ class GPT(nn.Module):
         # smear token embed forward 1 position @classiclarryd
         smear_lambda = self.scalars[5 * len(self.blocks)]
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
-        smear_mask = smear_gate_out
-        # smear_mask = torch.ones(x.shape[0], device=x.device, dtype=x.dtype)
-        # smear_mask[seqlens[1:] - 1] = 0
-        # smear_mask = smear_mask[:-1,None]
-        # smear_mask *= smear_gate_out
+        # smear_mask = smear_gate_out
+        smear_mask = torch.ones(x.shape[0], device=x.device, dtype=x.dtype)
+        smear_mask[seqlens[1:] - 1] = 0
+        smear_mask = smear_mask[:-1,None]
+        smear_mask *= smear_gate_out
         x = torch.cat([x[:1], x[1:] + smear_mask * x[:-1]])
         x = x0 = norm(x[None])
 
@@ -1456,7 +1456,7 @@ del train_loader, initial_state
 #        Training and validation       #
 ########################################
 
-train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps)
+train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps, align_to_bos=False)
 training_time_ms = 0
 # start the clock
 torch.cuda.synchronize()
