@@ -1442,7 +1442,10 @@ for step in range(warmup_steps):
         if new_ws_long > ws_long:
             model.yarn.apply(ws_long, new_ws_long)
             ws_long = new_ws_long
-    model(inputs, targets, cum_seqlens, ws_long//2, ws_long).backward()
+    loss = model(inputs, targets, cum_seqlens, ws_long//2, ws_long)
+    print(loss)
+    loss.backward()
+    del loss
     for opt in optimizers:
         opt.step()
     model.zero_grad(set_to_none=True)
