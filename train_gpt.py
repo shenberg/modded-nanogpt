@@ -947,9 +947,9 @@ class Block(nn.Module):
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = x + norm(self.attn(norm(x), attn_args))
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = x + norm(self.mlp(norm(x)))
         return x
 
 # -----------------------------------------------------------------------------
@@ -1429,7 +1429,7 @@ model: nn.Module = torch.compile(model, dynamic=False, fullgraph=True, backend='
 warmup_steps = 30
 initial_state = dict(model=copy.deepcopy(model.state_dict()),
                      optimizers=[copy.deepcopy(opt.state_dict()) for opt in optimizers]) # save the initial state
-train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps, align_to_bos=False)
+train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps)
 for step in range(warmup_steps):
     inputs, targets, cum_seqlens = next(train_loader)
     # each window size is a new graph, need to warm up each with Yarn.attn_scale
@@ -1459,7 +1459,7 @@ del train_loader, initial_state
 #        Training and validation       #
 ########################################
 
-train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps, align_to_bos=True)
+train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps)
 training_time_ms = 0
 # start the clock
 torch.cuda.synchronize()
