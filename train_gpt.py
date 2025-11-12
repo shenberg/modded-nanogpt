@@ -1456,7 +1456,7 @@ del train_loader, initial_state
 #        Training and validation       #
 ########################################
 
-train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps, align_to_bos=False)
+train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps, align_to_bos=True)
 training_time_ms = 0
 # start the clock
 torch.cuda.synchronize()
