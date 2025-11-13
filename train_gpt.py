@@ -1008,7 +1008,7 @@ class GPT(nn.Module):
         )
         # set learning rates
         for param in self.embed.parameters():
-            param.lr_mul = 38. # avg of 1.0 for lm_head and 75. for embed but frankly probably the wrong number
+            param.lr_mul = 1.
             # param.lr_mul = 75.
         for param in self.value_embeds.parameters():
             param.lr_mul = 75.
