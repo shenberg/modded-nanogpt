@@ -946,8 +946,9 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
         # self.mlp = MLP(dim) if (layer_idx != 0) and (layer_idx < 8) else None
         self.gate = CastedLinear(12, 1) if layer_idx != 0 else None
-        self.gate.weight.detach().zero_()
-        self.gate.weight.label = 'x0_gate'
+        if self.gate is not None:
+            self.gate.weight.detach().zero_()
+            self.gate.weight.label = 'x0_gate'
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + (lambdas[1] * torch.sigmoid(self.gate(x[..., :self.gate.weight.size(-1)]))) * x0
