@@ -917,8 +917,8 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
-        # hdim = 4 * dim
-        hdim = 16 * dim
+        hdim = 4 * dim
+        # hdim = 16 * dim
         # make matrices the same shape to enable batched call in optimizer
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
@@ -943,7 +943,7 @@ class Block(nn.Module):
         # skip attention of blocks.7 (the 8th layer) by @YouJiacheng
         self.attn = CausalSelfAttention(dim, head_dim, num_heads) if layer_idx not in [0, 7] else None
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
-        self.mlp = MLP(dim) if layer_idx != 0 else None
+        self.mlp = MLP(dim) if (layer_idx != 0) and layer_idx <  else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
@@ -975,16 +975,17 @@ class GPT(nn.Module):
 
         # weight typing
         mlp1 = self.blocks[1].mlp
-        for block in self.blocks[2:]:
-            block.mlp.c_fc = mlp1.c_fc
-            block.mlp.c_proj = mlp1.c_proj
+        # for block in self.blocks[2:]:
+        #     block.mlp.c_fc = mlp1.c_fc
+        #     block.mlp.c_proj = mlp1.c_proj
 
         self.yarn = Yarn(head_dim, max_seq_len)
         # there are only 50257 unique GPT-2 tokens; we extend to nearest multiple of 128 for efficiency.
         # suggested to me by @Grad62304977. this originates from Karpathy's experiments.
         use_fp8 = not os.environ.get("DISABLE_FP8", False)
         self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=use_fp8, x_s=(model_dim**0.5)/448, w_s=2**-9, grad_s=1/448)
-        self.lm_head.weight.detach().zero_() # @Grad62304977
+        # self.lm_head.weight.detach().zero_() # @Grad62304977
+        self.lm_head.weight = self.embed.weight
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
         pad = (-num_layers * 5 - 2) % dist.get_world_size()
