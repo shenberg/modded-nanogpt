@@ -943,7 +943,7 @@ class Block(nn.Module):
         # skip attention of blocks.7 (the 8th layer) by @YouJiacheng
         self.attn = CausalSelfAttention(dim, head_dim, num_heads) if layer_idx not in [0, 7] else None
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
-        self.mlp = MLP(dim) if layer_idx != 0 else None
+        self.mlp = MLP(dim) if (layer_idx != 0) or (layer_idx < 8) else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
@@ -984,8 +984,7 @@ class GPT(nn.Module):
         # suggested to me by @Grad62304977. this originates from Karpathy's experiments.
         use_fp8 = not os.environ.get("DISABLE_FP8", False)
         self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=use_fp8, x_s=(model_dim**0.5)/448, w_s=2**-9, grad_s=1/448)
-        # self.lm_head.weight.detach().zero_() # @Grad62304977
-        self.lm_head.weight = self.embed.weight
+        self.lm_head.weight.detach().zero_() # @Grad62304977
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
         pad = (-num_layers * 5 - 2) % dist.get_world_size()
@@ -1008,8 +1007,7 @@ class GPT(nn.Module):
         )
         # set learning rates
         for param in self.embed.parameters():
-            param.lr_mul = 1.
-            # param.lr_mul = 75.
+            param.lr_mul = 75.
         for param in self.value_embeds.parameters():
             param.lr_mul = 75.
         self.lm_head.weight.lr_mul = 1.0
@@ -1357,8 +1355,7 @@ gate_params = [p for n, p in model.named_parameters() if "gate" in n]
 # small adam epsilon by @YouJiacheng. this is an alternate method of fixing the world_size dependence
 # discovered by @fernbear.bsky.social https://x.com/hi_tysam/status/1879692937589875094
 optimizer1 = DistAdam(
-    # scalar_params + head_params + embed_params,
-    scalar_params + embed_params,
+    scalar_params + head_params + embed_params,
     lr=0.008,
     betas=(0.65, 0.95),
     eps=1e-8,
