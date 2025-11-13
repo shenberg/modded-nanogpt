@@ -917,7 +917,7 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
-        hdim = 6 * dim
+        hdim = 4 * dim
         # hdim = 16 * dim
         # make matrices the same shape to enable batched call in optimizer
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
@@ -943,7 +943,8 @@ class Block(nn.Module):
         # skip attention of blocks.7 (the 8th layer) by @YouJiacheng
         self.attn = CausalSelfAttention(dim, head_dim, num_heads) if layer_idx not in [0, 7] else None
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
-        self.mlp = MLP(dim) if (layer_idx != 0) and (layer_idx < 8) else None
+        self.mlp = MLP(dim) if layer_idx != 0 else None
+        # self.mlp = MLP(dim) if (layer_idx != 0) and (layer_idx < 8) else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
@@ -974,7 +975,7 @@ class GPT(nn.Module):
         self.blocks = nn.ModuleList([Block(model_dim, head_dim, num_heads, i) for i in range(num_layers)])
 
         # weight typing
-        mlp1 = self.blocks[1].mlp
+        # mlp1 = self.blocks[1].mlp
         # for block in self.blocks[2:]:
         #     block.mlp.c_fc = mlp1.c_fc
         #     block.mlp.c_proj = mlp1.c_proj
@@ -991,7 +992,8 @@ class GPT(nn.Module):
         self.scalars = nn.Parameter(
             torch.cat(
                 [
-                    -1.5
+                    # -1.5
+                    0.18
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
                         torch.tensor([1.0, 0.0]) for _ in range(num_layers)
@@ -1059,7 +1061,8 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                # gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                gate = skip_weights[i - n]
                 x = x + gate * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
