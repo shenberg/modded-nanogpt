@@ -974,6 +974,8 @@ class GPT(nn.Module):
         self.value_embeds = nn.ModuleList([nn.Embedding(vocab_size, model_dim) for _ in range(3)])
         self.blocks = nn.ModuleList([Block(model_dim, head_dim, num_heads, i) for i in range(num_layers)])
         self.skip_gates = nn.ModuleList([CastedLinear(12, 1) for i in range(num_layers // 2, num_layers - 1)])
+        for sg in self.skip_gates:
+            sg.weight.label = 'skip_gate'
         # weight typing
         # mlp1 = self.blocks[1].mlp
         # for block in self.blocks[2:]:
