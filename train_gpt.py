@@ -945,9 +945,12 @@ class Block(nn.Module):
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim) if layer_idx != 0 else None
         # self.mlp = MLP(dim) if (layer_idx != 0) and (layer_idx < 8) else None
+        self.gate = CastedLinear(12, 1) if layer_idx != 0 else None
+        self.gate.weight.detach().zero_()
+        self.gate.weight.label = 'x0_gate'
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        x = lambdas[0] * x + lambdas[1] * x0
+        x = lambdas[0] * x + (lambdas[1] * torch.sigmoid(self.gate(x[..., :self.gate.weight.size(-1)]))) * x0
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
@@ -973,10 +976,10 @@ class GPT(nn.Module):
         # value embedding code simplification inspired by @ragulpr https://github.com/KellerJordan/modded-nanogpt/pull/78
         self.value_embeds = nn.ModuleList([nn.Embedding(vocab_size, model_dim) for _ in range(3)])
         self.blocks = nn.ModuleList([Block(model_dim, head_dim, num_heads, i) for i in range(num_layers)])
-        self.skip_gates = nn.ModuleList([CastedLinear(12, 1) for i in range(num_layers // 2, num_layers - 1)])
-        for sg in self.skip_gates:
-            sg.weight.detach().zero_()
-            sg.weight.label = 'skip_gate'
+        # self.skip_gates = nn.ModuleList([CastedLinear(12, 1) for i in range(num_layers // 2, num_layers - 1)])
+        # for sg in self.skip_gates:
+        #     sg.weight.detach().zero_()
+        #     sg.weight.label = 'skip_gate'
         # weight typing
         # mlp1 = self.blocks[1].mlp
         # for block in self.blocks[2:]:
@@ -1066,7 +1069,8 @@ class GPT(nn.Module):
             if i >= n and i<11:
                 # gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 gate = skip_weights[i - n]
-                x = x + gate * torch.sigmoid(self.skip_gates[i - n](x[:, :, :self.skip_gates[i-n].weight.size(-1)])) * skip_connections.pop()
+                # x = x + gate * torch.sigmoid(self.skip_gates[i - n](x[..., :self.skip_gates[i-n].weight.size(-1)])) * skip_connections.pop()
+                x = x + gate * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
                 skip_connections.append(x)
