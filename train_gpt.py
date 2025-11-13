@@ -1008,7 +1008,8 @@ class GPT(nn.Module):
         )
         # set learning rates
         for param in self.embed.parameters():
-            param.lr_mul = 75.
+            param.lr_mul = 38. # avg of 1.0 for lm_head and 75. for embed but frankly probably the wrong number
+            # param.lr_mul = 75.
         for param in self.value_embeds.parameters():
             param.lr_mul = 75.
         self.lm_head.weight.lr_mul = 1.0
@@ -1356,7 +1357,8 @@ gate_params = [p for n, p in model.named_parameters() if "gate" in n]
 # small adam epsilon by @YouJiacheng. this is an alternate method of fixing the world_size dependence
 # discovered by @fernbear.bsky.social https://x.com/hi_tysam/status/1879692937589875094
 optimizer1 = DistAdam(
-    scalar_params + head_params + embed_params,
+    # scalar_params + head_params + embed_params,
+    scalar_params + embed_params,
     lr=0.008,
     betas=(0.65, 0.95),
     eps=1e-8,
