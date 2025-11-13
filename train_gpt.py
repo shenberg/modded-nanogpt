@@ -975,6 +975,7 @@ class GPT(nn.Module):
         self.blocks = nn.ModuleList([Block(model_dim, head_dim, num_heads, i) for i in range(num_layers)])
         self.skip_gates = nn.ModuleList([CastedLinear(12, 1) for i in range(num_layers // 2, num_layers - 1)])
         for sg in self.skip_gates:
+            sg.weight.detach().zero_()
             sg.weight.label = 'skip_gate'
         # weight typing
         # mlp1 = self.blocks[1].mlp
@@ -1065,7 +1066,7 @@ class GPT(nn.Module):
             if i >= n and i<11:
                 # gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 gate = skip_weights[i - n]
-                x = x + gate * torch.sigmoid(self.skip_gates[i - n](x[:, :self.skip_gates[i-n].weight.size(-1)])) * skip_connections.pop()
+                x = x + gate * torch.sigmoid(self.skip_gates[i - n](x[:, :, :self.skip_gates[i-n].weight.size(-1)])) * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
                 skip_connections.append(x)
