@@ -694,7 +694,7 @@ model.yarn.apply(ws_long, new_ws_long)
 ws_long = new_ws_long
 with torch.no_grad():
     acts = model(inputs, targets, cum_seqlens, ws_long//2, ws_long)
-    torch.save('activations.pt', dict(inputs=inputs, targets=targets, acts=acts, seqlens=cum_seqlens, ws=(ws_long // 2, ws_long)))
+    torch.save(dict(inputs=inputs, targets=targets, acts=acts, seqlens=cum_seqlens, ws=(ws_long // 2, ws_long)), 'activations.pt')
 
 
 print(f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
