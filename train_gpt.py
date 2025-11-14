@@ -938,8 +938,7 @@ class MLP(nn.Module):
     def forward(self, x: Tensor):
         h = self.c_squeeze(x)
         h = F.relu(h).square()
-        x *= torch.sigmoid(self.c_gate(h))
-        x = F.linear(x, self.c_fc.T.type_as(x))
+        x = F.linear(x * torch.sigmoid(self.c_gate(h)), self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
