@@ -921,24 +921,17 @@ class MLP(nn.Module):
         # make matrices the same shape to enable batched call in optimizer
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
-        self.c_squeeze = CastedLinear(dim, 16)
-        self.c_gate = CastedLinear(16, dim)
         # label modules to enable custom optimizer sizing
         self.c_fc.label='mlp'
         self.c_proj.label='mlp'
-        self.c_squeeze.weight.label='mlp'
-        self.c_gate.weight.label='mlp'
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
-            self.c_gate.weight.zero_()
 
     def forward(self, x: Tensor):
-        h = self.c_squeeze(x)
-        h = F.relu(h).square()
-        x = F.linear(x * torch.sigmoid(self.c_gate(h)), self.c_fc.T.type_as(x))
+        x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
@@ -1276,7 +1269,7 @@ class Hyperparameters:
     # evaluation and logging
     run_id: str = f"{uuid.uuid4()}"
     val_loss_every: int = 250  # every how many steps to evaluate val loss? 0 for only at the end
-    save_checkpoint: bool = False
+    save_checkpoint: bool = True
     # attention masking
     block_size: int = 128
     ws_schedule: tuple = (3, 7, 11)
