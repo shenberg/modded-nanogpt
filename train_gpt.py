@@ -983,7 +983,7 @@ class GPT(nn.Module):
         self.scalars = nn.Parameter(
             torch.cat(
                 [
-                    -1.5
+                    0.18#-1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
                         torch.tensor([1.0, 0.0]) for _ in range(num_layers)
@@ -1051,7 +1051,7 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i<11:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                gate = skip_weights[i - n]
                 x = x + gate * skip_connections.pop(0)
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
