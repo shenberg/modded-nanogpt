@@ -961,6 +961,7 @@ def next_multiple_of_n(v: float | int, *, n: int):
 class GPT(nn.Module):
     def __init__(self, vocab_size: int, num_layers: int, num_heads: int, head_dim: int, model_dim: int, max_seq_len: int):
         super().__init__()
+        self.vocab_orig_size = vocab_size
         vocab_size = next_multiple_of_n(vocab_size, n=128)
         self.embed = nn.Embedding(vocab_size, model_dim)
         self.smear_gate = CastedLinear(12, 1)
@@ -1067,7 +1068,7 @@ class GPT(nn.Module):
         logits = 30 * torch.sigmoid(logits / 7.5)
         logits_for_loss = logits.float() if not self.training else logits
         loss = F.cross_entropy(
-            logits_for_loss.view(-1, logits_for_loss.size(-1)),
+            logits_for_loss.view(-1, logits_for_loss.size(-1))[:, :self.vocab_orig_size],
             target_seq,
             reduction="sum" if self.training else "mean",
         )
