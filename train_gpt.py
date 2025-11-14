@@ -922,7 +922,7 @@ class MLP(nn.Module):
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
         self.c_squeeze = CastedLinear(dim, 16)
-        self.c_gate = CastedLinear(16, hdim)
+        self.c_gate = CastedLinear(16, dim)
         # label modules to enable custom optimizer sizing
         self.c_fc.label='mlp'
         self.c_proj.label='mlp'
@@ -937,9 +937,10 @@ class MLP(nn.Module):
 
     def forward(self, x: Tensor):
         h = self.c_squeeze(x)
+        h = F.relu(h).square()
+        x *= torch.sigmoid(self.c_gate(h))
         x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
-        x *= torch.sigmoid(self.c_gate(h))
         x = F.linear(x, self.c_proj.type_as(x))
         return x
 
