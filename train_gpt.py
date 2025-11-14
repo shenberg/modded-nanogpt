@@ -914,7 +914,7 @@ class CausalSelfAttention(nn.Module):
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
-            v = sa_lambdas[0] * v + sa_lambdas[1] * torch.sigmoid(self.ve_gate(v.view_as(ve)[..., :self.ve_gate.weight.size(-1)]).view_as(B,T,1,1)) * ve.view_as(v) # @ KoszarskyB & @Grad62304977
+            v = sa_lambdas[0] * v + sa_lambdas[1] * torch.sigmoid(self.ve_gate(v.view_as(ve)[..., :self.ve_gate.weight.size(-1)]).view(B,T,1,1)) * ve.view_as(v) # @ KoszarskyB & @Grad62304977
         else: # skip mid-layers token value embeddings by @YouJiacheng
             v = sa_lambdas[0] * v
 
