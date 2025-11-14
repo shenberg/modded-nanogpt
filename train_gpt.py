@@ -1270,7 +1270,7 @@ class Hyperparameters:
     # evaluation and logging
     run_id: str = f"{uuid.uuid4()}"
     val_loss_every: int = 250  # every how many steps to evaluate val loss? 0 for only at the end
-    save_checkpoint: bool = True
+    save_checkpoint: bool = False
     # attention masking
     block_size: int = 128
     ws_schedule: tuple = (3, 7, 11)
