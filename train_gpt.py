@@ -860,7 +860,7 @@ class AttnArgs:
 flash_attn_interface = get_kernel('varunneal/flash-attention-3').flash_attn_interface
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, dim: int, head_dim: int, num_heads: int, has_ve: bool):
+    def __init__(self, dim: int, head_dim: int, num_heads: int):
         super().__init__()
         self.num_heads = num_heads
         self.head_dim = head_dim
@@ -886,21 +886,6 @@ class CausalSelfAttention(nn.Module):
         self.attn_gate.weight.label = 'attn_gate'
         self.attn_gate.weight.detach().zero_()
 
-        # sparse gated attention to enable context based no-op by @classiclarryd
-        self.attn_gate = CastedLinear(12, num_heads)
-        # label module to enable custom optimizer sizing
-        self.attn_gate.weight.label = 'attn_gate'
-        self.attn_gate.weight.detach().zero_()
-
-        if has_ve:
-            # data-dependent gating for value embedding
-            self.ve_gate = CastedLinear(12, 1)
-            # label module to enable custom optimizer sizing
-            self.ve_gate.weight.label = 've_gate'
-            self.ve_gate.weight.detach().zero_()
-        else:
-            self.ve_gate = None
-
     def forward(self, x: Tensor, attn_args: AttnArgs):
         B, T = x.size(0), x.size(1) # batch size, sequence length
         assert B == 1, "varlen sequences requires B == 1"
@@ -914,7 +899,7 @@ class CausalSelfAttention(nn.Module):
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
-            v = sa_lambdas[0] * v + sa_lambdas[1] * torch.sigmoid(self.ve_gate(v.view_as(ve)[..., :self.ve_gate.weight.size(-1)]).view(B,T,1,1)) * ve.view_as(v) # @ KoszarskyB & @Grad62304977
+            v = sa_lambdas[0] * v + sa_lambdas[1] * ve.view_as(v) # @ KoszarskyB & @Grad62304977
         else: # skip mid-layers token value embeddings by @YouJiacheng
             v = sa_lambdas[0] * v
 
@@ -936,18 +921,25 @@ class MLP(nn.Module):
         # make matrices the same shape to enable batched call in optimizer
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
+        self.c_squeeze = CastedLinear(dim, 16)
+        self.c_gate = CastedLinear(16, hdim)
         # label modules to enable custom optimizer sizing
         self.c_fc.label='mlp'
         self.c_proj.label='mlp'
+        self.c_squeeze.weight.label='mlp'
+        self.c_gate.weight.label='mlp'
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
+            self.c_gate.weight.zero_()
 
     def forward(self, x: Tensor):
+        h = self.c_squeeze(x)
         x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
+        x *= torch.sigmoid(self.c_gate(h))
         x = F.linear(x, self.c_proj.type_as(x))
         return x
 
@@ -955,7 +947,7 @@ class Block(nn.Module):
     def __init__(self, dim: int, head_dim: int, num_heads: int, layer_idx: int):
         super().__init__()
         # skip attention of blocks.7 (the 8th layer) by @YouJiacheng
-        self.attn = CausalSelfAttention(dim, head_dim, num_heads, layer_idx in (1,2,9,10,11)) if layer_idx not in [0, 7] else None
+        self.attn = CausalSelfAttention(dim, head_dim, num_heads) if layer_idx not in [0, 7] else None
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
