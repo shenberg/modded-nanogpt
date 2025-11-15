@@ -961,7 +961,6 @@ def next_multiple_of_n(v: float | int, *, n: int):
 class GPT(nn.Module):
     def __init__(self, vocab_size: int, num_layers: int, num_heads: int, head_dim: int, model_dim: int, max_seq_len: int):
         super().__init__()
-        self.vocab_orig_size = vocab_size
         vocab_size = next_multiple_of_n(vocab_size, n=128)
         self.embed = nn.Embedding(vocab_size, model_dim)
         self.smear_gate = CastedLinear(12, 1)
@@ -985,7 +984,7 @@ class GPT(nn.Module):
             torch.cat(
                 [
                     0.18#-1.5
-                    * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
+                    * torch.ones(num_layers*num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
                         torch.tensor([1.0, 0.0]) for _ in range(num_layers)
                     ],  # block lambdas
@@ -1023,17 +1022,18 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         # smear token embed forward 1 position @classiclarryd
-        smear_lambda = self.scalars[5 * len(self.blocks)]
+        smear_lambda = self.scalars[(4 + len(self.blocks)) * len(self.blocks)]
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
         x = torch.cat([x[:1], x[1:] + smear_gate_out * x[:-1]])
         x = x0 = norm(x[None])
 
         # U-net design by @brendanh0gan
         skip_connections = []
-        skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
-        sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
-        backout_lambda = self.scalars[5 * len(self.blocks)+1]
+        # skip_weights = self.scalars[:(len(self.blocks*) // 2)]
+        skip_weights = self.scalars[:len(self.blocks) * len(self.blocks)].view(len(self.blocks), len(self.blocks))
+        lambdas = self.scalars[len(self.blocks) * len(self.blocks): (2 + len(self.blocks)) * len(self.blocks)].view(-1, 2)
+        sa_lambdas = self.scalars[(2 + len(self.blocks)) * len(self.blocks): (4 + len(self.blocks)) * len(self.blocks)].view(-1, 2)
+        backout_lambda = self.scalars[(4 + len(self.blocks)) * len(self.blocks)+1]
 
         n = len(self.blocks) // 2
 
@@ -1051,11 +1051,13 @@ class GPT(nn.Module):
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
-            if i >= n and i<11:
-                gate = skip_weights[i - n]
-                x = x + gate * skip_connections.pop(0)
+            # if i >= n and i<11:
+            #     gate = skip_weights[i - n]
+            #     x = x + gate * skip_connections.pop(0)
+            for j, skip in enumerate(skip_connections):
+                x = x + skip_weights[i, j] * skip
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
-            if i < n:
+            if i < 11:
                 skip_connections.append(x)
             if i == backout_layer:
                 x_backout = x
@@ -1068,7 +1070,7 @@ class GPT(nn.Module):
         logits = 30 * torch.sigmoid(logits / 7.5)
         logits_for_loss = logits.float() if not self.training else logits
         loss = F.cross_entropy(
-            logits_for_loss.view(-1, logits_for_loss.size(-1))[:, :self.vocab_orig_size],
+            logits_for_loss.view(-1, logits_for_loss.size(-1)),
             target_seq,
             reduction="sum" if self.training else "mean",
         )
