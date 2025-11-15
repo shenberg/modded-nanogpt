@@ -1050,7 +1050,7 @@ class GPT(nn.Module):
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
-            if i >= n and i<11:
+            if i > n:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 x = x + gate * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
