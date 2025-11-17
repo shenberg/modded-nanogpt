@@ -1056,8 +1056,9 @@ class GPT(nn.Module):
                     x = x + gate * skip_connections[i-n]
                 else:
                     # this layer is special
-                    for gate, skip in zip(torch.sigmoid(skip_weights[n:]), skip_connections):
-                        x = x + gate * skip
+                    gate = torch.sigmoid(skip_weights[n:])
+                    for j in range(5):
+                        x = x + gate[j] * skip_connections[j]
 
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i < n:
