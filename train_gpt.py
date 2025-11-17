@@ -1053,7 +1053,7 @@ class GPT(nn.Module):
             if i >= n and i < 11:
                 if i != backout_layer:
                     gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-                    x = x + gate * skip_connections[n - (i - n) - 1]
+                    x = x + gate * skip_connections[n - (i - n) - 2]
                 else:
                     # this layer is special
                     gate = torch.sigmoid(skip_weights[n:])
