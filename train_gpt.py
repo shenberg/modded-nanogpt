@@ -1029,7 +1029,7 @@ class GPT(nn.Module):
 
         # U-net design by @brendanh0gan
         skip_connections = []
-        skip_weights = self.scalars[:self.blocks]
+        skip_weights = self.scalars[:len(self.blocks)]
         lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
         sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
         backout_lambda = self.scalars[5 * len(self.blocks)+1]
