@@ -986,7 +986,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([0.0, -1.7]) for _ in range(num_layers)
+                        torch.tensor([1.0, 0]) for _ in range(num_layers)
                     ],  # block lambdas
                     *[
                         torch.tensor([0.5, 0.5]) for _ in range(num_layers)
@@ -1029,7 +1029,7 @@ class GPT(nn.Module):
 
         # U-net design by @brendanh0gan
         skip_connections = []
-        skip_weights = self.scalars[:(len(self.blocks) // 2)]
+        skip_weights = self.scalars[:self.blocks]
         lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
         sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
         backout_lambda = self.scalars[5 * len(self.blocks)+1]
@@ -1051,10 +1051,16 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i < 11:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-                x = x + gate * skip_connections.pop()
-            x = self.blocks[i](x, x0, torch.exp(lambdas[i]), attn_args)
-            if i <= n - 1:
+                if i != backout_layer:
+                    gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                    x = x + gate * skip_connections[i-n]
+                else:
+                    # this layer is special
+                    for gate, skip in zip(torch.sigmoid(skip_weights[n:]), skip_connections):
+                        x = x + gate * skip
+
+            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            if i < n:
                 skip_connections.append(x)
             if i == backout_layer:
                 x_backout = x
