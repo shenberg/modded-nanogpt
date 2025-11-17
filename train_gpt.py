@@ -945,7 +945,7 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        x = torch.exp(lambdas[0]) * x + lambdas[1] * x0
+        x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
@@ -986,7 +986,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([0.0, 0.0]) for _ in range(num_layers)
+                        torch.tensor([0.0, -1.7]) for _ in range(num_layers)
                     ],  # block lambdas
                     *[
                         torch.tensor([0.5, 0.5]) for _ in range(num_layers)
@@ -1053,7 +1053,7 @@ class GPT(nn.Module):
             if i > n and i < 11:
                 gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
                 x = x + gate * skip_connections.pop()
-            x = self.blocks[i](x, x0, lambdas[i], attn_args)
+            x = self.blocks[i](x, x0, torch.exp(lambdas[i]), attn_args)
             if i < n - 1:
                 skip_connections.append(x)
             if i == backout_layer:
