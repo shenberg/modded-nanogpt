@@ -1064,7 +1064,8 @@ class GPT(nn.Module):
             if i < n:
                 skip_connections.append(x)
             if i == backout_layer:
-                x_backout = x
+                x0 = x_backout = x
+                
 
         # back out contributions from first 8 layers that are only required for downstream context and not direct prediction
         x -= backout_lambda * x_backout
