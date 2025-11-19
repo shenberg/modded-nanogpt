@@ -951,7 +951,7 @@ class Block(nn.Module):
         if self.mlp is not None:
             # x = lambdas[2] * x + lambdas[3] * x0
             # x = x + lambdas[3] * x0
-            x = lambdas[2] * x
+            x = lambdas[2] * x + lambdas[1] * x0
             x = x + self.mlp(norm(x))
         return x
 
