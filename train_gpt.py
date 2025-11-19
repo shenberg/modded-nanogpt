@@ -950,7 +950,8 @@ class Block(nn.Module):
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
             # x = lambdas[2] * x + lambdas[3] * x0
-            x = x + lambdas[3] * x0
+            # x = x + lambdas[3] * x0
+            x = lambdas[2] * x
             x = x + self.mlp(norm(x))
         return x
 
