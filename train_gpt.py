@@ -909,7 +909,7 @@ class CausalSelfAttention(nn.Module):
         y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens, max_seqlen_q=max_len, max_seqlen_k=max_len,
                                    causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
         y = y.view(B, T, self.num_heads, self.head_dim)
-        y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
+        y = norm(y) * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = F.linear(y, self.qkvo_w.view(4, self.hdim, self.dim)[3].type_as(y))
         return y
@@ -949,9 +949,7 @@ class Block(nn.Module):
             x = lambdas[0] * x + lambdas[1] * x0
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            # x = lambdas[2] * x + lambdas[3] * x0
-            # x = x + lambdas[3] * x0
-            x = lambdas[2] * x + lambdas[1] * x0
+            x = lambdas[2] * x + lambdas[3] * x0
             x = x + self.mlp(norm(x))
         return x
 
