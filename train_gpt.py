@@ -949,7 +949,8 @@ class Block(nn.Module):
             x = lambdas[0] * x + lambdas[1] * x0
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = lambdas[2] * x + lambdas[3] * x0
+            # x = lambdas[2] * x + lambdas[3] * x0
+            x = x + lambdas[3] * x0
             x = x + self.mlp(norm(x))
         return x
 
@@ -1282,7 +1283,7 @@ class Hyperparameters:
     # evaluation and logging
     run_id: str = f"{uuid.uuid4()}"
     val_loss_every: int = 250  # every how many steps to evaluate val loss? 0 for only at the end
-    save_checkpoint: bool = True
+    save_checkpoint: bool = False
     # attention masking
     block_size: int = 128
     ws_schedule: tuple = (3, 7, 11)
