@@ -1030,7 +1030,7 @@ class GPT(nn.Module):
 
         # U-net design by @brendanh0gan
         skip_connections = []
-        skip_weights = self.scalars[:len(self.blocks)]
+        skip_weights = torch.sigmoid(self.scalars[:len(self.blocks)])
         lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 4)
         sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
         backout_lambda = self.scalars[7 * len(self.blocks)+1]
@@ -1052,7 +1052,7 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i >= n and i < 11:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                gate = skip_weights[i - n]  # in (0, 1)
                 x = x + gate * skip_connections.pop()
                 #if i != backout_layer:
                 #    gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
@@ -1282,7 +1282,7 @@ class Hyperparameters:
     # evaluation and logging
     run_id: str = f"{uuid.uuid4()}"
     val_loss_every: int = 250  # every how many steps to evaluate val loss? 0 for only at the end
-    save_checkpoint: bool = False
+    save_checkpoint: bool = True
     # attention masking
     block_size: int = 128
     ws_schedule: tuple = (3, 7, 11)
