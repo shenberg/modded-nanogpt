@@ -991,7 +991,7 @@ class GPT(nn.Module):
                         torch.tensor([1.0, 0, 1.0, 0]) for _ in range(num_layers)
                     ],  # block lambdas
                     *[
-                        torch.tensor([1., 0.5]) for _ in range(num_layers)
+                        torch.tensor([0.5, 1.0]) for _ in range(num_layers)
                     ],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
