@@ -909,7 +909,7 @@ class CausalSelfAttention(nn.Module):
         y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0], cu_seqlens_q=seqlens, cu_seqlens_k=seqlens, max_seqlen_q=max_len, max_seqlen_k=max_len,
                                    causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
         y = y.view(B, T, self.num_heads, self.head_dim)
-        y = norm(y) * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
+        y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = F.linear(y, self.qkvo_w.view(4, self.hdim, self.dim)[3].type_as(y))
         return y
@@ -993,7 +993,7 @@ class GPT(nn.Module):
                         torch.tensor([0.5, 0.5]) for _ in range(num_layers)
                     ],  # SA lambdas
                     torch.zeros(1), # smear_lambda
-                    0.5*torch.ones(1), # backout_lambda
+                    0, #0.5*torch.ones(1), # backout_lambda
                     torch.ones(pad),
                 ]
             )
@@ -1033,7 +1033,7 @@ class GPT(nn.Module):
         skip_weights = torch.sigmoid(self.scalars[:len(self.blocks)])
         lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 4)
         sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
-        backout_lambda = self.scalars[7 * len(self.blocks)+1]
+        backout_lambda = torch.sigmoid(self.scalars[7 * len(self.blocks)+1])
 
         n = len(self.blocks) // 2
 
