@@ -859,19 +859,16 @@ class CausalSelfAttention(nn.Module):
         ve, sa_lambdas = attn_args.ve, attn_args.sa_lambdas
         seqlens, attn_scale, bm_size = attn_args.seqlens, attn_args.attn_scale, attn_args.bm_size
 
-        # q, k, v = F.linear(x, sa_lambdas[0] * self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
-        # q, k = norm(q), norm(k) # QK norm @Grad62304977
-        # q, k = rotary(q, cos, sin), rotary(k, cos, sin)
-        qk, v = F.linear(x, sa_lambdas[0] * self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).split(2*self.num_heads, dim=-2)
-        qk = norm(qk) # QK norm @Grad62304977
-        qk = rotary(qk, cos, sin)
+        q, k, v = F.linear(x, sa_lambdas[0] * self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
+        q, k = norm(q), norm(k) # QK norm @Grad62304977
+        q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
             v = v + sa_lambdas[1] * ve.view_as(v) # @ KoszarskyB & @Grad62304977
 
         max_len = args.train_max_seq_len if self.training else (args.val_batch_size // (grad_accum_steps * world_size))
 
         # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng
-        y = flash_attn_interface.flash_attn_varlen_func(qk[0, :, : self.num_heads], qk[0, :, self.num_heads : 2 * self.num_heads], v[0],
+        y = flash_attn_interface.flash_attn_varlen_func(q[0], k[0], v[0],
                                                         cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
                                                         max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                         causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
@@ -916,11 +913,11 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        x = lambdas[0] * x + lambdas[1] * x0
+        # x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = x * lambdas[0] + (1 - lambdas[0]) * self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = x * lambdas[1] + (1 - lambdas[1]) * self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
@@ -955,7 +952,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0]) for _ in range(num_layers) 
+                        torch.tensor([1., 1.0]) for _ in range(num_layers) 
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
