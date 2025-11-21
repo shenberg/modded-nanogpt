@@ -1019,11 +1019,10 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i in skip_out:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-                x = x + gate * skip_connections.pop()
+                x = x + skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i in skip_in:
-                skip_connections.append(x)
+                skip_connections.append(x * torch.sigmoid(skip_weights[n - i]))
             if i == backout_layer:
                 x_backout = x
 
