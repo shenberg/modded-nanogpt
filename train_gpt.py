@@ -891,6 +891,10 @@ class MLP(nn.Module):
         # corrective factor to account for transpose
         self.c_fc.lr_mul = 2.
 
+        self.in_scale = nn.Parameter(torch.ones(1))
+        self.in_scale.lr_mul = 5.
+        self.in_scale.label = 'scale'
+
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
@@ -898,7 +902,7 @@ class MLP(nn.Module):
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
-        x = F.linear(x, self.c_fc.T.type_as(x))
+        x = F.linear(x, self.c_fc.T.type_as(x) * self.in_scale.as_type(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
