@@ -891,10 +891,6 @@ class MLP(nn.Module):
         # corrective factor to account for transpose
         self.c_fc.lr_mul = 2.
 
-        self.in_scale = nn.Parameter(torch.ones(1))
-        self.in_scale.lr_mul = 5.
-        self.in_scale.label = 'scale'
-
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
@@ -902,7 +898,7 @@ class MLP(nn.Module):
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
-        x = F.linear(x, self.c_fc.T.type_as(x) * self.in_scale.type_as(x))
+        x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
@@ -1023,11 +1019,12 @@ class GPT(nn.Module):
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
             if i in skip_out:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-                x = x + gate * skip_connections.pop()
+                # gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+                # x = x + gate * skip_connections.pop()
+                x = x + skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i in skip_in:
-                skip_connections.append(x)
+                skip_connections.append(x * torch.sigmoid(skip_weights[n - i]))
             if i == backout_layer:
                 x_backout = x
 
@@ -1234,7 +1231,7 @@ class Hyperparameters:
     train_max_seq_len: int = 128 * 16
     val_batch_size: int = 4 * 64 * 1024 * 8
     # optimization
-    num_scheduled_iterations: int = 2170  # number of steps to complete lr and ws schedule
+    num_scheduled_iterations: int = 2185  # number of steps to complete lr and ws schedule
     num_extension_iterations: int = 40  # number of steps to continue training at final lr and ws
     num_iterations: int = num_scheduled_iterations + num_extension_iterations
     cooldown_frac: float = 0.50  # fraction of num_scheduled_iterations spent cooling down the learning rate
