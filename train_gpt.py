@@ -974,12 +974,6 @@ class GPT(nn.Module):
     def forward(self, input_seq: Tensor, target_seq: Tensor, seqlens: Tensor, ws_short: int, ws_long: int):
         assert input_seq.ndim == 1
 
-        ve = [value_embed(input_seq) for value_embed in self.value_embeds]
-        # 012 ... 012 structure on token value embeddings by @YouJiacheng, improved on @leloykun's U-net structure
-        # dropping first layer updates this to .12 ... 012
-        ve = [None, ve[1], ve[2]] + [None] * (len(self.blocks) - 6) + [ve[0], ve[1], ve[2]]
-        assert len(ve) == len(self.blocks)
-
         short_bm = ws_short * args.block_size
         long_bm = ws_long * args.block_size
         bm_sizes = [None, short_bm, short_bm, short_bm, long_bm, short_bm, short_bm, None, short_bm, short_bm, short_bm, long_bm]
@@ -992,6 +986,13 @@ class GPT(nn.Module):
         sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
         smear_lambda = self.scalars[5 * len(self.blocks)]
         backout_lambda = self.scalars[5 * len(self.blocks)+1]
+
+        ve = [value_embed(input_seq) for value_embed in self.value_embeds]
+        # 012 ... 012 structure on token value embeddings by @YouJiacheng, improved on @leloykun's U-net structure
+        # dropping first layer updates this to .12 ... 012
+        ve = [None, ve[1] * sa_lambdas[1,1], ve[2] * sa_lambdas[2,1]] + [None] * (len(self.blocks) - 6) \
+            + [ve[0] * sa_lambdas[9,1], ve[1] * sa_lambdas[10,1], ve[2] * sa_lambdas[11,1]]
+        assert len(ve) == len(self.blocks)
 
         # smear token embed forward 1 position @classiclarryd
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
