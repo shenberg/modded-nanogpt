@@ -871,7 +871,7 @@ class CausalSelfAttention(nn.Module):
         max_len = args.train_max_seq_len if self.training else (args.val_batch_size // (grad_accum_steps * world_size))
 
         # use flash_attn over flex_attn @varunneal. flash_attn_varlen suggested by @YouJiacheng
-        y = flash_attn_interface.flash_attn_varlen_func(qk[0, :, : self.num_heads], qk[0, self.num_heads : 2 * self.num_heads, ], v[0],
+        y = flash_attn_interface.flash_attn_varlen_func(qk[0, :, : self.num_heads], qk[0, :, self.num_heads : 2 * self.num_heads], v[0],
                                                         cu_seqlens_q=seqlens, cu_seqlens_k=seqlens,
                                                         max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                         causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
