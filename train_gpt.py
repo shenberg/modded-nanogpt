@@ -1374,6 +1374,7 @@ def get_ws(step: int):
     return args.ws_schedule[ws_idx] // 2, args.ws_schedule[ws_idx]
 
 def should_tread(step: int):
+    return True
     # every 10th step disables tread, also the final annealing
     return step <= args.num_scheduled_iterations and (step % 10 != 0)
 
@@ -1438,7 +1439,7 @@ for step in range(warmup_steps):
         new_ws_long = ws_schedule[ws_idx]
         model.yarn.apply(ws_long, new_ws_long)
         ws_long = new_ws_long
-    enable_tread = step >= len(ws_schedule)
+    enable_tread = True # step >= len(ws_schedule)
     model(inputs, targets, cum_seqlens, ws_long//2, ws_long, enable_tread).backward()
     for opt in optimizers:
         opt.step()
@@ -1484,7 +1485,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for _ in range(val_steps):
                 inputs, targets, cum_seqlens = next(val_loader)
-                val_loss += model(inputs, targets, cum_seqlens, ws_short, ws_long, False)
+                val_loss += model(inputs, targets, cum_seqlens, ws_short, ws_long, True)
         val_loss /= val_steps
         del val_loader
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
