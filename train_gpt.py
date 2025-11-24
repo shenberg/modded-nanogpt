@@ -898,9 +898,9 @@ class MLP(nn.Module):
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor, scale: Tensor):
-        x = F.linear(x, self.c_fc.T.type_as(x))
+        x = F.linear(x, (self.c_fc.T * scale).type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
-        x = F.linear(x, (self.c_proj * scale).type_as(x))
+        x = F.linear(x, self.c_proj.type_as(x))
         return x
 
 class Block(nn.Module):
