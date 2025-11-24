@@ -1009,6 +1009,7 @@ class GPT(nn.Module):
         tread_start_layer = 3
         tread_end_layer = 8
         original_x = None
+        original_x0 = x0
         original_cos = None
         original_sin = None
         original_seqlens = None
@@ -1039,11 +1040,13 @@ class GPT(nn.Module):
                 original_sin = self.yarn.sin
                 self.yarn.cos = self.yarn.cos[::2]
                 self.yarn.sin = self.yarn.sin[::2]
+                x0 = x0[:, ::2]
             elif enable_tread and i == tread_end_layer:
                 x = torch.stack([x, original_x[:, 1::2]], dim=2).reshape_as(original_x)
                 self.yarn.cos = original_cos
                 self.yarn.sin = original_sin
                 seqlens = original_seqlens
+                x0 = original_x0
 
             if i == backout_layer:
                 x_backout = x
@@ -1432,7 +1435,8 @@ for step in range(warmup_steps):
         new_ws_long = ws_schedule[ws_idx]
         model.yarn.apply(ws_long, new_ws_long)
         ws_long = new_ws_long
-    model(inputs, targets, cum_seqlens, ws_long//2, ws_long).backward()
+    enable_tread = step >= len(ws_schedule)
+    model(inputs, targets, cum_seqlens, ws_long//2, ws_long, enable_tread).backward()
     for opt in optimizers:
         opt.step()
     model.zero_grad(set_to_none=True)
