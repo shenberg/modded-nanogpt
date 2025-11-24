@@ -1044,7 +1044,7 @@ class GPT(nn.Module):
                 self.yarn.sin = self.yarn.sin[::2]
                 x0 = x0[:, ::2]
             elif enable_tread and i == tread_end_layer:
-                x = torch.stack([x, original_x[:, 1::2] * tread_lambda], dim=2).reshape_as(original_x)
+                x = torch.stack([x, original_x[:, 1::2]], dim=2).reshape_as(original_x)
                 self.yarn.cos = original_cos
                 self.yarn.sin = original_sin
                 seqlens = original_seqlens
