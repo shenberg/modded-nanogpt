@@ -1374,7 +1374,8 @@ def get_ws(step: int):
     return args.ws_schedule[ws_idx] // 2, args.ws_schedule[ws_idx]
 
 def should_tread(step: int):
-    return step <= args.num_scheduled_iterations
+    # every 10th step disables tread, also the final annealing
+    return step <= args.num_scheduled_iterations and (step % 10 != 0)
 
 def get_muon_momentum(step: int, muon_warmup_steps=300, muon_cooldown_steps=50, momentum_min=0.85, momentum_max=0.95):
     # warmup phase: linearly increase momentum from min to max
