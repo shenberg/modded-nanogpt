@@ -1019,7 +1019,7 @@ class GPT(nn.Module):
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
                 seqlens=seqlens,
-                bm_size=bm_sizes[i] // 2 if enable_tread and tread_start_layer < i <= tread_end_layer else bm_sizes[i],
+                bm_size=bm_sizes[i] // 2 if enable_tread and bm_sizes[i] and tread_start_layer < i <= tread_end_layer else bm_sizes[i],
                 cos=self.yarn.cos,
                 sin=self.yarn.sin,
                 attn_scale=self.yarn.attn_scale
