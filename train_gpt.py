@@ -897,8 +897,8 @@ class MLP(nn.Module):
             self.c_fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
-    def forward(self, x: Tensor, scale: Tensor):
-        x = F.linear(x, (self.c_fc.T * scale).type_as(x))
+    def forward(self, x: Tensor):
+        x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
@@ -916,7 +916,7 @@ class Block(nn.Module):
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = x + self.mlp(norm(x), lambdas[2])
+            x = x + self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
@@ -944,14 +944,14 @@ class GPT(nn.Module):
         self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=use_fp8, x_s=(model_dim**0.5)/448, w_s=2**-9, grad_s=1/448)
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
-        pad = (-num_layers * 6 - 2) % dist.get_world_size()
+        pad = (-num_layers * 5 - 2) % dist.get_world_size()
         self.scalars = nn.Parameter(
             torch.cat(
                 [
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0, 1.0]) for _ in range(num_layers)
+                        torch.tensor([1.1, 0.0]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
@@ -971,7 +971,7 @@ class GPT(nn.Module):
         self.lm_head.weight.lr_mul = 1.0
         self.scalars.lr_mul = 5.0
 
-    def forward(self, input_seq: Tensor, target_seq: Tensor, seqlens: Tensor, ws_short: int, ws_long: int):
+    def forward(self, input_seq: Tensor, target_seq: Tensor, seqlens: Tensor, ws_short: int, ws_long: int, enable_tread: bool):
         assert input_seq.ndim == 1
 
         ve = [value_embed(input_seq) for value_embed in self.value_embeds]
@@ -988,10 +988,10 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 4 * len(self.blocks)].view(-1, 3)
-        sa_lambdas = self.scalars[4 * len(self.blocks): 6 * len(self.blocks)].view(-1, 2)
-        smear_lambda = self.scalars[6 * len(self.blocks)]
-        backout_lambda = self.scalars[6 * len(self.blocks)+1]
+        lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
+        sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
+        smear_lambda = self.scalars[5 * len(self.blocks)]
+        backout_lambda = self.scalars[5 * len(self.blocks)+1]
 
         # smear token embed forward 1 position @classiclarryd
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
@@ -1006,6 +1006,12 @@ class GPT(nn.Module):
 
         x_backout = None
         backout_layer = 8
+        tread_start_layer = 3
+        tread_end_layer = 8
+        original_x = None
+        original_cos = None
+        original_sin = None
+        original_seqlens = None
         # skip layer zero
         for i in range(1,len(self.blocks)):
             attn_args = AttnArgs(
@@ -1024,6 +1030,21 @@ class GPT(nn.Module):
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
             if i in skip_in:
                 skip_connections.append(x)
+            if enable_tread and i == tread_start_layer:
+                original_seqlens = seqlens
+                seqlens = seqlens // 2
+                original_x = x
+                x = x[:, ::2]
+                original_cos = self.yarn.cos
+                original_sin = self.yarn.sin
+                self.yarn.cos = self.yarn.cos[::2]
+                self.yarn.sin = self.yarn.sin[::2]
+            elif enable_tread and i == tread_end_layer:
+                x = torch.stack([x, original_x[:, 1::2]], dim=2).reshape_as(original_x)
+                self.yarn.cos = original_cos
+                self.yarn.sin = original_sin
+                seqlens = original_seqlens
+
             if i == backout_layer:
                 x_backout = x
 
@@ -1347,6 +1368,9 @@ def get_ws(step: int):
     ws_idx = int(len(args.ws_schedule) * x)
     return args.ws_schedule[ws_idx] // 2, args.ws_schedule[ws_idx]
 
+def should_tread(step: int):
+    return step <= args.num_scheduled_iterations
+
 def get_muon_momentum(step: int, muon_warmup_steps=300, muon_cooldown_steps=50, momentum_min=0.85, momentum_max=0.95):
     # warmup phase: linearly increase momentum from min to max
     # cooldown phase: linearly decrease momentum from max to min
@@ -1437,7 +1461,7 @@ for step in range(train_steps + 1):
     if new_ws_long != ws_long:
         model.yarn.apply(ws_long, new_ws_long)
         ws_long=new_ws_long
-
+    enable_tread = should_tread(step)
     # --------------- VALIDATION SECTION -----------------
     if last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0):
         if last_step:
@@ -1453,7 +1477,7 @@ for step in range(train_steps + 1):
         with torch.no_grad():
             for _ in range(val_steps):
                 inputs, targets, cum_seqlens = next(val_loader)
-                val_loss += model(inputs, targets, cum_seqlens, ws_short, ws_long)
+                val_loss += model(inputs, targets, cum_seqlens, ws_short, ws_long, False)
         val_loss /= val_steps
         del val_loader
         dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
@@ -1478,7 +1502,7 @@ for step in range(train_steps + 1):
             optimizers[0].should_sync = True
 
         inputs, targets, cum_seqlens = next(train_loader)
-        (model(inputs, targets, cum_seqlens, ws_short, ws_long) / grad_accum_steps).backward()
+        (model(inputs, targets, cum_seqlens, ws_short, ws_long, enable_tread) / grad_accum_steps).backward()
     step_optimizers(step, optimizers, model)
 
     # logging
