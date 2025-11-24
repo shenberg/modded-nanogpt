@@ -959,7 +959,7 @@ class GPT(nn.Module):
                     ],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
-                    10.*torch.ones(1), # tread_lambda
+                    1.*torch.ones(1), # tread_lambda
                     torch.ones(pad),
                 ]
             )
@@ -1021,7 +1021,7 @@ class GPT(nn.Module):
                 ve=ve[i],
                 sa_lambdas=sa_lambdas[i],
                 seqlens=seqlens,
-                bm_size=bm_sizes[i] if not bm_sizes[i] or (enable_tread and tread_start_layer < i <= tread_end_layer) else bm_sizes[i] * 2,
+                bm_size=bm_sizes[i] if (not bm_sizes[i]) or (enable_tread and tread_start_layer < i <= tread_end_layer) else bm_sizes[i] * 2,
                 cos=self.yarn.cos,
                 sin=self.yarn.sin,
                 attn_scale=self.yarn.attn_scale
