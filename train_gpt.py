@@ -944,7 +944,7 @@ class GPT(nn.Module):
         self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=use_fp8, x_s=(model_dim**0.5)/448, w_s=2**-9, grad_s=1/448)
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
-        pad = (-num_layers * 5 - 2) % dist.get_world_size()
+        pad = (-num_layers * 5 - 3) % dist.get_world_size()
         self.scalars = nn.Parameter(
             torch.cat(
                 [
@@ -959,6 +959,7 @@ class GPT(nn.Module):
                     ],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
+                    10.*torch.ones(1), # tread_lambda
                     torch.ones(pad),
                 ]
             )
@@ -992,6 +993,7 @@ class GPT(nn.Module):
         sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
         smear_lambda = self.scalars[5 * len(self.blocks)]
         backout_lambda = self.scalars[5 * len(self.blocks)+1]
+        tread_lambda = self.scalars[5 * len(self.blocks)+2]
 
         # smear token embed forward 1 position @classiclarryd
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
@@ -1042,7 +1044,7 @@ class GPT(nn.Module):
                 self.yarn.sin = self.yarn.sin[::2]
                 x0 = x0[:, ::2]
             elif enable_tread and i == tread_end_layer:
-                x = torch.stack([x, original_x[:, 1::2]], dim=2).reshape_as(original_x)
+                x = torch.stack([x, original_x[:, 1::2] * tread_lambda], dim=2).reshape_as(original_x)
                 self.yarn.cos = original_cos
                 self.yarn.sin = original_sin
                 seqlens = original_seqlens
