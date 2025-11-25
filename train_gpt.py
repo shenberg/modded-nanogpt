@@ -669,7 +669,7 @@ class DistAdam(torch.optim.Optimizer):
 
         self._param_to_group = {param : group for group in self.param_groups for param in group['params']}
         self._reduce_scatter_hooks = []
-        self._reduce_scatter_futures = {}
+        self._reduce_scatter_futures = []
         self.register_backward_hooks()
 
     def register_backward_hooks(self):
@@ -688,10 +688,11 @@ class DistAdam(torch.optim.Optimizer):
         grad = param.grad
         rank_size = grad.shape[0] // self.world_size
         grad_slice = torch.empty_like(grad[:rank_size])
-        self._reduce_scatter_futures[param] = (
+        self._reduce_scatter_futures.append((
+            param,
             dist.reduce_scatter_tensor(grad_slice, grad, op=dist.ReduceOp.AVG, async_op=True).get_future(),
             grad_slice
-        )
+        ))
 
     @torch.compile
     @torch.no_grad()
@@ -700,7 +701,7 @@ class DistAdam(torch.optim.Optimizer):
         all_gather_futures: list[torch.Future] = []
 
         # go by hook call order 
-        for param, (fut, g_slice) in self._reduce_scatter_futures.items():
+        for param, fut, g_slice in self._reduce_scatter_futures:
             group = self._param_to_group[param]
             beta1, beta2 = group['betas']
             eps = group['eps']
