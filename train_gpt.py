@@ -700,7 +700,7 @@ class DistAdam(torch.optim.Optimizer):
         all_gather_futures: list[torch.Future] = []
 
         # go by hook call order 
-        for param, (fut, g_slice) in self._reduce_scatter_futures:
+        for param, (fut, g_slice) in self._reduce_scatter_futures.items():
             group = self.param_to_group[param]
             beta1, beta2 = group['betas']
             eps = group['eps']
