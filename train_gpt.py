@@ -701,7 +701,7 @@ class DistAdam(torch.optim.Optimizer):
 
         # go by hook call order 
         for param, (fut, g_slice) in self._reduce_scatter_futures.items():
-            group = self.param_to_group[param]
+            group = self._param_to_group[param]
             beta1, beta2 = group['betas']
             eps = group['eps']
             wd = group['weight_decay']
