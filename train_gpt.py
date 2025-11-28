@@ -915,7 +915,9 @@ class MLP(nn.Module):
 
     def forward(self, x: Tensor):
         x = F.linear(x, self.c_fc.T.type_as(x))
-        x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
+        # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
+        x = torch.clamp(x, 0).square() + torch.clamp(x, max=0) * 0.1
+
         x = F.linear(x, self.c_proj.type_as(x))
         return x
         # return norm(x) * self.out_scale.type_as(x)
