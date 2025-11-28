@@ -902,7 +902,7 @@ class MLP(nn.Module):
         self.c_fc.lr_mul = 2.
 
         self.out_gate = CastedLinear(12, 1)
-        self.out_gate.label = 'out_gate'
+        self.out_gate.weight.label = 'out_gate'
 
         # self.out_scale.lr_mul = 5.
         std = 0.5 * (dim ** -0.5)
