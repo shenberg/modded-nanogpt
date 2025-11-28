@@ -894,23 +894,27 @@ class MLP(nn.Module):
         # make matrices the same shape to enable batched call in optimizer
         self.c_fc = nn.Parameter(torch.empty(dim, hdim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
+        self.gate = nn.Parameter(torch.empty(1))
         # label modules to enable custom optimizer sizing
         self.c_fc.label = 'mlp'
         self.c_proj.label = 'mlp'
         # corrective factor to account for transpose
         self.c_fc.lr_mul = 2.
 
+        self.gate.lr_mul = 5.
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
-            self.c_proj.zero_() # zero init suggested by @Grad62304977
+            self.c_proj.uniform_(-bound, bound)
+            self.gate.zero_()
+            # self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
         x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
-        return x
+        return norm(x) * self.gate
 
 class Block(nn.Module):
     def __init__(self, dim: int, head_dim: int, num_heads: int, layer_idx: int):
