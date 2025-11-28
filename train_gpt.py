@@ -901,24 +901,25 @@ class MLP(nn.Module):
         # corrective factor to account for transpose
         self.c_fc.lr_mul = 2.
 
-        self.out_gate = CastedLinear(12, 1)
-        self.out_gate.weight.label = 'out_gate'
+        # self.out_gate = CastedLinear(12, 1)
+        # self.out_gate.weight.label = 'out_gate'
 
         # self.out_scale.lr_mul = 5.
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
-            self.c_proj.uniform_(-bound, bound)
+            # self.c_proj.uniform_(-bound*0.5, bound*0.5)
             # self.out_scale.zero_()
-            # self.c_proj.zero_() # zero init suggested by @Grad62304977
+            self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
         x = F.linear(x, self.c_fc.T.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
+        return x
         # return norm(x) * self.out_scale.type_as(x)
-        return norm(x) * self.out_gate(x[..., :self.out_gate.weight.size(-1)])
+        # return norm(x) * self.out_gate(x[..., :self.out_gate.weight.size(-1)])
 
 class Block(nn.Module):
     def __init__(self, dim: int, head_dim: int, num_heads: int, layer_idx: int):
@@ -1035,12 +1036,12 @@ class GPT(nn.Module):
                 attn_scale=self.yarn.attn_scale
             )
             # since layer 0 is skipped, layer 11 does not have skip_connection
-            if i in skip_out:
-                gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
-                x = x + gate * skip_connections.pop()
+            # if i in skip_out:
+            #     gate = torch.sigmoid(skip_weights[i - n])  # in (0, 1)
+            #     x = x + gate * skip_connections.pop()
             x = self.blocks[i](x, x0, lambdas[i], attn_args)
-            if i in skip_in:
-                skip_connections.append(x)
+            # if i in skip_in:
+            #     skip_connections.append(x)
             if i == backout_layer:
                 x_backout = x
 
