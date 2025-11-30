@@ -931,10 +931,9 @@ class Block(nn.Module):
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         if self.attn is not None:
-            x = lambdas[2] * x + self.attn(norm(x), attn_args)
+            x = lambdas[0] * x + self.attn(norm(x + lambdas[1] * x0), attn_args)
         if self.mlp is not None:
-            x = lambdas[3] * x + self.mlp(norm(x))
-        x = lambdas[0] * x + lambdas[1] * x0
+            x = lambdas[2] * x + self.mlp(norm(x + lambdas[3] * x0))
         return x
         # x_res = x
         # if self.attn is not None:
@@ -976,7 +975,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0, 1.0, 1.0]) for _ in range(num_layers)
+                        torch.tensor([1.1, 0.0, 1.0, 0.0]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
