@@ -931,9 +931,9 @@ class Block(nn.Module):
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         if self.attn is not None:
-            x = lambdas[0] * x + self.attn(norm(x + lambdas[1] * x0), attn_args)
+            x = lambdas[0] * x + lambdas[1] * x0 + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = lambdas[2] * x + self.mlp(norm(x + lambdas[3] * x0))
+            x = lambdas[2] * x + lambdas[3] * x0 + self.mlp(norm(x))
         return x
         # x_res = x
         # if self.attn is not None:
