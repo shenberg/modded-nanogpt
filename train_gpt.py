@@ -930,18 +930,24 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        # x = lambdas[0] * x + lambdas[1] * x0
-        x_res = x
+        x = lambdas[0] * x + (1 - lambdas[0]) * x0
         if self.attn is not None:
-            x = x + self.attn(x, attn_args)
+            x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = x_res + self.mlp(norm(x))
-        return norm(lambdas[0] * x + lambdas[1] * x0)
+            x = x + self.mlp(norm(x))
+        return x
+        # x_res = x
+        # if self.attn is not None:
+        #     x = x + self.attn(x, attn_args)
+        # if self.mlp is not None:
+        #     x = x_res + self.mlp(norm(x))
+        # return norm(lambdas[0] * x + lambdas[1] * x0)
 
 # -----------------------------------------------------------------------------
 # The main model
 
 def next_multiple_of_n(v: float | int, *, n: int):
+
     return next(x for x in range(n, int(v) + 1 + n, n) if x >= v)
 
 class GPT(nn.Module):
