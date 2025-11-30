@@ -1400,7 +1400,8 @@ def step_optimizers(step: int, optimizers, model):
     # on odd steps, step all params
     if step%2==0:
         optimizers[1].step()
-        optimizers[1].zero_grad(set_to_none=True)
+        # optimizers[1].zero_grad(set_to_none=True)
+        model.zero_grad(set_to_none=True)
     else:
         for optimizer in optimizers:
             optimizer.step()
