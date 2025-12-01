@@ -921,9 +921,9 @@ class MLP(nn.Module):
         x = x.view(x.shape[0], x.shape[1], 4, x.shape[2] // 4)
         for i, fc in enumerate(self.c_fc):
             if h is None:
-                h = F.relu(F.linear(x[:, :, i], self.c_fc.T.type_as(x))).square()
+                h = F.relu(F.linear(x[:, :, i], fc.T.type_as(x))).square()
             else:
-                h = h + F.relu(F.linear(x[:, :, i], self.c_fc.T.type_as(x))).square()
+                h = h + F.relu(F.linear(x[:, :, i], fc.T.type_as(x))).square()
         # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(h, self.c_proj.type_as(h))
         return x
