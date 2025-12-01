@@ -892,31 +892,41 @@ class MLP(nn.Module):
         super().__init__()
         hdim = 4 * dim
         # make matrices the same shape to enable batched call in optimizer
-        self.c_fc = nn.Parameter(torch.empty(dim, hdim))
-        self.c_proj = nn.Parameter(torch.empty(dim, hdim))
-        # self.out_scale = nn.Parameter(torch.empty(1))
-        # label modules to enable custom optimizer sizing
-        self.c_fc.label = 'mlp'
-        self.c_proj.label = 'mlp'
-        # corrective factor to account for transpose
-        self.c_fc.lr_mul = 2.
+        self.c_fc = nn.ParameterList([
+            nn.Parameter(torch.empty(dim // 4, hdim)),
+            nn.Parameter(torch.empty(dim // 4, hdim)),
+            nn.Parameter(torch.empty(dim // 4, hdim)),
+            nn.Parameter(torch.empty(dim // 4, hdim)),
+        ])
+
+        for fc in self.c_fc:
+            # label modules to enable custom optimizer sizing
+            fc.label = 'mlp'
+            # corrective factor to account for transpose
+            fc.lr_mul = 2.
 
         # self.out_gate = CastedLinear(12, 1)
         # self.out_gate.weight.label = 'out_gate'
 
         # self.out_scale.lr_mul = 5.
-        std = 0.5 * (dim ** -0.5)
+        std = 0.5 * ((dim // 4) ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
-            self.c_fc.uniform_(-bound, bound)
-            # self.c_proj.uniform_(-bound*0.5, bound*0.5)
-            # self.out_scale.zero_()
+            for fc in self.c_fc:
+                fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
-        x = F.linear(x, self.c_fc.T.type_as(x))
-        x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
-        x = F.linear(x, self.c_proj.type_as(x))
+        h = None
+        # TODO: can be done more efficiently with bmm
+        x = x.view(x.shape[0], x.shape[1], 4, x.shape[2] // 4)
+        for i, fc in enumerate(self.c_fc):
+            if h is None:
+                h = F.relu(F.linear(x[:, :, i], self.c_fc.T.type_as(x))).square()
+            else:
+                h = h + F.relu(F.linear(x[:, :, i], self.c_fc.T.type_as(x))).square()
+        # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
+        x = F.linear(x, self.c_proj.type_as(h))
         return x
         # return norm(x) * self.out_scale.type_as(x)
         # return norm(x) * self.out_gate(x[..., :self.out_gate.weight.size(-1)])
