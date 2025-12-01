@@ -898,6 +898,7 @@ class MLP(nn.Module):
             nn.Parameter(torch.empty(dim // 4, hdim)),
             nn.Parameter(torch.empty(dim // 4, hdim)),
         ])
+        self.c_proj = nn.Parameter(torch.empty(dim, hdim))
 
         for fc in self.c_fc:
             # label modules to enable custom optimizer sizing
