@@ -904,7 +904,7 @@ class MLP(nn.Module):
 
         for fc in self.c_fc:
             # label modules to enable custom optimizer sizing
-            fc.label = 'mlp'
+            fc.label = 'mlp2'
             # corrective factor to account for transpose
             fc.lr_mul = 2.
 
