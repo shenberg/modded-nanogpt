@@ -899,6 +899,8 @@ class MLP(nn.Module):
             nn.Parameter(torch.empty(dim // 4, hdim)),
         ])
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
+        self.c_proj.label = 'mlp'
+        self.c_proj.lr_mul = 1.
 
         for fc in self.c_fc:
             # label modules to enable custom optimizer sizing
@@ -906,10 +908,6 @@ class MLP(nn.Module):
             # corrective factor to account for transpose
             fc.lr_mul = 2.
 
-        # self.out_gate = CastedLinear(12, 1)
-        # self.out_gate.weight.label = 'out_gate'
-
-        # self.out_scale.lr_mul = 5.
         std = 0.5 * ((dim // 4) ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
