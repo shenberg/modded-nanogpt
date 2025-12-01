@@ -926,7 +926,7 @@ class MLP(nn.Module):
             else:
                 h = h + F.relu(F.linear(x[:, :, i], self.c_fc.T.type_as(x))).square()
         # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
-        x = F.linear(x, self.c_proj.type_as(h))
+        x = F.linear(h, self.c_proj.type_as(h))
         return x
         # return norm(x) * self.out_scale.type_as(x)
         # return norm(x) * self.out_gate(x[..., :self.out_gate.weight.size(-1)])
