@@ -990,7 +990,7 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
+        lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 4)
         sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
         smear_lambda = self.scalars[7 * len(self.blocks)]
         backout_lambda = self.scalars[7 * len(self.blocks)+1]
