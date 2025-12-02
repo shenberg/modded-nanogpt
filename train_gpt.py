@@ -916,9 +916,9 @@ class Block(nn.Module):
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
         x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = x + lambdas[2] * norm(self.attn(norm(x), attn_args))
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = x + lambdas[3] * norm(self.mlp(norm(x)))
         return x
 
 # -----------------------------------------------------------------------------
@@ -946,14 +946,14 @@ class GPT(nn.Module):
         self.lm_head = CastedLinear(model_dim, vocab_size, use_fp8=use_fp8, x_s=(model_dim**0.5)/448, w_s=2**-9, grad_s=1/448)
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
-        pad = (-num_layers * 5 - 2) % dist.get_world_size()
+        pad = (-num_layers * 7 - 2) % dist.get_world_size()
         self.scalars = nn.Parameter(
             torch.cat(
                 [
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0]) for _ in range(num_layers) 
+                        torch.tensor([1.1, 0.0, 1.0, 1.0]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
@@ -990,10 +990,10 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
-        sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
-        smear_lambda = self.scalars[5 * len(self.blocks)]
-        backout_lambda = self.scalars[5 * len(self.blocks)+1]
+        lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
+        sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
+        smear_lambda = self.scalars[7 * len(self.blocks)]
+        backout_lambda = self.scalars[7 * len(self.blocks)+1]
 
         # smear token embed forward 1 position @classiclarryd
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
