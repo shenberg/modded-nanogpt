@@ -843,7 +843,8 @@ class CausalSelfAttention(nn.Module):
 
         with torch.no_grad():
             self.qkvo_w.view(4,self.hdim, self.dim)[:3].uniform_(-bound, bound) # init QKV weights
-            self.qkvo_w.view(4,self.hdim, self.dim)[3].zero_() # init output weights to zero
+            # self.qkvo_w.view(4,self.hdim, self.dim)[3].zero_() # init output weights to zero
+            self.qkvo_w.view(4,self.hdim, self.dim)[3].uniform_(-bound, bound)
 
         # sparse gated attention to enable context based no-op by @classiclarryd
         self.attn_gate = CastedLinear(12, num_heads)
@@ -897,7 +898,8 @@ class MLP(nn.Module):
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
-            self.c_proj.zero_() # zero init suggested by @Grad62304977
+            self.c_proj.uniform_(-bound*0.5, bound*0.5)
+            # self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
         x = F.linear(x, self.c_fc.T.type_as(x))
