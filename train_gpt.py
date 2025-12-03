@@ -775,8 +775,7 @@ class Yarn(nn.Module):
 
     def reset(self):
         angular_freq = (1 / 1024) ** torch.linspace(0, 1, steps=self.head_dim//8, dtype=torch.float32, device=device)
-        # half-truncate RoPE by @YouJiacheng (w/ base freq tuning)
-        angular_freq = torch.cat([angular_freq, angular_freq.new_zeros(3*self.head_dim//8)])
+
         t = torch.arange(self.max_seq_len, dtype=torch.float32, device=device)
         theta = torch.outer(t, angular_freq)
         self.cos = nn.Buffer(
@@ -802,14 +801,15 @@ class Yarn(nn.Module):
 
 def rotary(x_BTHD: Tensor, cos: Tensor, sin: Tensor):
     assert cos.size(0) >= x_BTHD.size(-3)
+
     cos, sin = (
         cos[None, : x_BTHD.size(-3), None, :],
         sin[None, : x_BTHD.size(-3), None, :],
     )
-    x1, x2 = x_BTHD.chunk(2, dim=-1)
+    x1, x2, rest = x_BTHD.split((cos.size(-1), cos.size(-1), cos.size(-1)*6), dim=-1)
     y1 = x1 * cos + x2 * sin
     y2 = x1 * (-sin) + x2 * cos
-    return torch.cat((y1, y2), 3)
+    return torch.cat((y1, y2, rest), 3)
 
 @dataclass
 class AttnArgs:
