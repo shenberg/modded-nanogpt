@@ -916,11 +916,11 @@ class Block(nn.Module):
         self.mlp = MLP(dim) if layer_idx != 0 else None
 
     def forward(self, x: Tensor, x0: Tensor, lambdas: Tensor, attn_args: AttnArgs):
-        x = lambdas[0] * x + lambdas[1] * x0
         if self.attn is not None:
-            x = x + lambdas[2] * norm(self.attn(norm(x), attn_args))
+            x = x + self.attn(norm(x), attn_args)
+        x = lambdas[0] * x + lambdas[1] * x0
         if self.mlp is not None:
-            x = x + lambdas[3] * norm(self.mlp(norm(x)))
+            x = x + self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
