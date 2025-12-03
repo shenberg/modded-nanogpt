@@ -955,7 +955,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0, 1.0, 1.0]) for _ in range(num_layers)
+                        torch.tensor([1.1, 0.0, 0.0, 0.0]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
