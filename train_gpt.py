@@ -917,10 +917,10 @@ class Block(nn.Module):
         x = x + lambdas[1] * x0
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
-            x = x + (lambdas[0] * x.detach())
+            x = x*lambdas[0]
         if self.mlp is not None:
             x = x + self.mlp(norm(x))
-            x = x + (lambdas[2] * x.detach())
+            x = x * lambdas[2]
         return x
 
 # -----------------------------------------------------------------------------
@@ -955,7 +955,7 @@ class GPT(nn.Module):
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([0.0, 0.0, 0.0]) for _ in range(num_layers)
+                        torch.tensor([0.05, 0.0, 0.05]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
