@@ -737,7 +737,7 @@ class DistAdam(torch.optim.Optimizer):
                 all_gather_futures.append(dist.all_gather_into_tensor(param, p_slice, async_op=True).get_future())
 
         self._reduce_scatter_futures.clear()
-        torch.futures.collect_all(all_gather_futures).wait()
+        return torch.futures.collect_all(all_gather_futures)
 
 # -----------------------------------------------------------------------------
 # PyTorch nn.Module definitions for the model
@@ -1380,8 +1380,12 @@ def step_optimizers(step: int, optimizers, model):
         optimizers[1].step()
         optimizers[1].zero_grad(set_to_none=True)
     else:
+        futs = []
         for optimizer in optimizers:
-            optimizer.step()
+            futs.append(optimizer.step())
+        for fut in futs:
+            if fut is not None:
+                fut.wait()
         model.zero_grad(set_to_none=True)
         # disable sync in the next training step for the adam optimizer
         optimizers[0].should_sync = False
