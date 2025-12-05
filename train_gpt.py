@@ -883,23 +883,29 @@ class MLP(nn.Module):
         super().__init__()
         hdim = 4 * dim
         # make matrices the same shape to enable batched call in optimizer
-        self.c_fc = nn.Parameter(torch.empty(dim, hdim))
+        # self.c_fc = nn.Parameter(torch.empty(dim, hdim))
+        self.c_fc_sincos = nn.Parameter(torch.empty(dim, dim))
+        self.c_fc_mlp = nn.Parameter(torch.empty(dim, 2*dim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
         # label modules to enable custom optimizer sizing
-        self.c_fc.label = 'mlp'
+        self.c_fc_sincos.label = 'mlp'
+        self.c_fc_mlp.label = 'mlp'
         self.c_proj.label = 'mlp'
         # corrective factor to account for transpose
-        self.c_fc.lr_mul = 2.
+        # self.c_fc.lr_mul = 2.
 
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
-            self.c_fc.uniform_(-bound, bound)
+            self.c_fc_sincos.uniform_(-bound, bound)
+            self.c_fc_mlp.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
 
     def forward(self, x: Tensor):
-        x = F.linear(x, self.c_fc.T.type_as(x))
-        x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
+        x_sincos = F.linear(x, self.c_fc_sincos.type_as(x))
+        x_mlp = F.linear(x, self.c_fc_mlp.T.type_as(x))
+        x = torch.cat([x_sincos.sin(), x_sincos.cos(), torch.sigmoid(x_mlp)], dim=-1)
+        # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
 
