@@ -859,11 +859,11 @@ class CausalSelfAttention(nn.Module):
         ve, sa_lambdas = attn_args.ve, attn_args.sa_lambdas
         seqlens, attn_scale, bm_size = attn_args.seqlens, attn_args.attn_scale, attn_args.bm_size
 
-        q, k, v = F.linear(x, (sa_lambdas[0] * self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1)).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
+        q, k, v = F.linear(x, (sa_lambdas[0].type_as(self.qkvo_w) * self.qkvo_w.view(4, self.hdim, self.dim)[:3].flatten(end_dim=1)).type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
-            v = v + sa_lambdas[1] * ve.view_as(v) # @ KoszarskyB & @Grad62304977
+            v = v + sa_lambdas[1].type_as(ve) * ve.view_as(v) # @ KoszarskyB & @Grad62304977
 
         max_len = args.train_max_seq_len if self.training else (args.val_batch_size // (grad_accum_steps * world_size))
 
@@ -1299,7 +1299,7 @@ model: nn.Module = GPT(
     max_seq_len=max(args.train_batch_size, args.val_batch_size) // (grad_accum_steps * world_size)
 ).cuda()
 for m in model.modules():
-    if isinstance(m, (nn.Embedding, nn.Linear)):
+    if isinstance(m, (nn.Embedding, nn.Linear, CausalSelfAttention)):
         m.bfloat16()
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
