@@ -904,7 +904,7 @@ class MLP(nn.Module):
     def forward(self, x: Tensor):
         x_sincos = F.linear(x, self.c_fc_sincos.type_as(x))
         x_mlp = F.linear(x, self.c_fc_mlp.T.type_as(x))
-        x = torch.cat([x_sincos.sin(), x_sincos.cos(), torch.sigmoid(x_mlp)], dim=-1)
+        x = torch.cat([x_sincos.sin(), x_sincos.cos(), torch.relu(x_mlp).square()], dim=-1)
         # x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.type_as(x))
         return x
