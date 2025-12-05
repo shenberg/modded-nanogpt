@@ -888,9 +888,9 @@ class MLP(nn.Module):
         self.c_fc_mlp = nn.Parameter(torch.empty(dim, 2*dim))
         self.c_proj = nn.Parameter(torch.empty(dim, hdim))
         # label modules to enable custom optimizer sizing
-        self.c_fc_sincos.label = 'mlp'
-        self.c_fc_mlp.label = 'mlp'
-        self.c_proj.label = 'mlp'
+        self.c_fc_sincos.label = 'mlp1'
+        self.c_fc_mlp.label = 'mlp2'
+        self.c_proj.label = 'mlp3'
         # corrective factor to account for transpose
         # self.c_fc.lr_mul = 2.
 
