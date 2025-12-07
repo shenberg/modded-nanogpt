@@ -872,8 +872,8 @@ class CausalSelfAttention(nn.Module):
                                                         max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                         causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
         y = y.view(B, T, self.num_heads, self.head_dim)
-        # y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
-        y = y * F.silu(sa_lambdas[0] + self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
+        y = y * (sa_lambdas[0] * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1))
+        # y = y * F.silu(sa_lambdas[0] + self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = F.linear(y, self.qkvo_w.view(4, self.hdim, self.dim)[3].type_as(y))
         return y
@@ -956,7 +956,7 @@ class GPT(nn.Module):
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i). 
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
-                        torch.tensor([0.25, 1.0]) for _ in range(num_layers)
+                        torch.tensor([0.5, 1.0]) for _ in range(num_layers)
                     ],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
