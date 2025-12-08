@@ -1409,6 +1409,7 @@ for step in range(warmup_steps):
         new_ws_long = ws_schedule[ws_idx]
         model.yarn.apply(ws_long, new_ws_long)
         ws_long = new_ws_long
+    optimizers[0].should_sync = True
     model(inputs, targets, cum_seqlens, ws_long//2, ws_long).backward()
     for opt in optimizers:
         opt.step()
