@@ -1398,6 +1398,7 @@ initial_state = dict(model=copy.deepcopy(model.state_dict()),
 train_loader = distributed_data_generator(args.train_files, args.train_batch_size, args.train_max_seq_len, grad_accum_steps=grad_accum_steps)
 ws_schedule = list(args.ws_schedule) + [args.ws_final]
 ws_long = ws_schedule[0]
+model.train()
 for step in range(warmup_steps):
     inputs, targets, cum_seqlens = next(train_loader)
     # each window size is a new graph, need to warm up each with Yarn.attn_scale
@@ -1420,7 +1421,7 @@ for step in range(warmup_steps):
             opt.step()
         model.zero_grad(set_to_none=True)
         optimizers[0].should_sync = False
-
+model.eval()
 val_steps = grad_accum_steps * args.val_tokens // args.val_batch_size
 val_loader = distributed_data_generator(args.val_files, args.val_batch_size, -1, grad_accum_steps=grad_accum_steps, align_to_bos=False)
 val_loss = 0
@@ -1437,6 +1438,7 @@ with torch.no_grad():
             ws_long = new_ws_long
         val_loss += model(inputs, targets, cum_seqlens, ws_long // 2, ws_long)
 
+model.train()
 model.yarn.reset() # rotary buffer is not stored in state_dict
 model.load_state_dict(initial_state["model"])
 optimizer2.reset() # muon momentum buffers not in state dict
