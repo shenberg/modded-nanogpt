@@ -1401,7 +1401,7 @@ ws_long = ws_schedule[0]
 for step in range(warmup_steps):
     inputs, targets, cum_seqlens = next(train_loader)
     # each window size is a new graph, need to warm up each with Yarn.attn_scale
-    ws_idx = step % len(ws_schedule)
+    ws_idx = (step // 2) % len(ws_schedule)
     if ws_idx==0:
         model.yarn.reset()
         ws_long = ws_schedule[0]
@@ -1409,17 +1409,40 @@ for step in range(warmup_steps):
         new_ws_long = ws_schedule[ws_idx]
         model.yarn.apply(ws_long, new_ws_long)
         ws_long = new_ws_long
-    optimizers[0].should_sync = True
+    if step % 2 == 1:
+        optimizers[0].should_sync = True
     model(inputs, targets, cum_seqlens, ws_long//2, ws_long).backward()
-    for opt in optimizers:
-        opt.step()
-    model.zero_grad(set_to_none=True)
+    if step % 2 == 0:
+        optimizers[1].step()
+        optimizers[1].zero_grad(set_to_none=True)
+    else:
+        for opt in optimizers:
+            opt.step()
+        model.zero_grad(set_to_none=True)
+        optimizers[0].should_sync = False
+
+val_steps = grad_accum_steps * args.val_tokens // args.val_batch_size
+val_loader = distributed_data_generator(args.val_files, args.val_batch_size, -1, grad_accum_steps=grad_accum_steps, align_to_bos=False)
+val_loss = 0
+with torch.no_grad():
+    for step in range(val_steps):
+        inputs, targets, cum_seqlens = next(val_loader)
+        ws_idx = step % len(ws_schedule)
+        if ws_idx==0:
+            model.yarn.reset()
+            ws_long = ws_schedule[0]
+        else:
+            new_ws_long = ws_schedule[ws_idx]
+            model.yarn.apply(ws_long, new_ws_long)
+            ws_long = new_ws_long
+        val_loss += model(inputs, targets, cum_seqlens, ws_long // 2, ws_long)
+
 model.yarn.reset() # rotary buffer is not stored in state_dict
 model.load_state_dict(initial_state["model"])
 optimizer2.reset() # muon momentum buffers not in state dict
 for opt, opt_state in zip(optimizers, initial_state["optimizers"]):
     opt.load_state_dict(opt_state)
-del train_loader, initial_state
+del train_loader, initial_state, val_loader, val_loss
 
 ########################################
 #        Training and validation       #
