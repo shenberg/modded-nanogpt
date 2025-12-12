@@ -570,6 +570,10 @@ class NorMuon(torch.optim.Optimizer):
                 )
             second_momentum_buffer = group["second_momentum_buffer"]
 
+            if "param_acc" not in group:
+                group["param_acc"] = torch.zeros_like(grad_chunk[:num_params])
+            param_acc = group["param_acc"]
+
             if "param_lr" not in group:
                 group["param_lr"] = (
                     max(1., param_shape[-2] / param_shape[-1]) ** 0.5
@@ -610,7 +614,8 @@ class NorMuon(torch.optim.Optimizer):
             mask = (v_chunk * param_chunk) >= 0
             v_chunk.addcmul_(param_chunk, (eff_wd * mask).to(ref_param.dtype))
 
-            param_chunk.addcmul_(v_chunk, -eff_lr)
+            # param_chunk.addcmul_(v_chunk, -eff_lr)
+            grow_exp_(param_chunk, param_acc, v_chunk * (-eff_lr))
 
             updated_params[:num_params].copy_(param_chunk)
             if num_params < chunk_size:
@@ -1312,9 +1317,8 @@ model: nn.Module = GPT(
     model_dim=768,
     max_seq_len=args.val_batch_size // (grad_accum_steps * world_size)
 ).cuda()
-for m in model.modules():
-    if isinstance(m, (nn.Embedding, nn.Linear)):
-        m.bfloat16()
+model.bfloat16()
+
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
 
