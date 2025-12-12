@@ -645,6 +645,14 @@ class NorMuon(torch.optim.Optimizer):
                 p.copy_(unstacked_params[i], non_blocking=True)
 
 
+def grow_exp_(tensor_m, tensor_r, val):
+    # tensor_m, tensor_r can be modified in-place
+    result_m = tensor_m + val
+    tensor_r.add_(val - (result_m - tensor_m))
+    tensor_m.copy_(result_m + tensor_r)
+    tensor_r.sub_(tensor_m - result_m)
+
+
 class DistAdam(torch.optim.Optimizer):
     def __init__(self, params, lr: float = 1e-3, betas: tuple[float, float] = (0.9, 0.999), eps: float = 1e-8, weight_decay: float = 0.01):
         self.world_size = dist.get_world_size() if dist.is_initialized() else 1
@@ -662,7 +670,8 @@ class DistAdam(torch.optim.Optimizer):
             chunk_size = p.size(0) // self.world_size
             exp_avg = torch.zeros_like(p[:chunk_size], dtype=torch.bfloat16, device=p[0].device)
             exp_avg_sq = torch.zeros_like(exp_avg)
-            self.state[p] = dict(step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq)
+            w_acc = torch.zeros_like(exp_avg)
+            self.state[p] = dict(step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq, w_acc=w_acc)
         # DistributedAdam implementation by @vagrawal, @akash5474
 
         self.should_sync = False
@@ -716,6 +725,8 @@ class DistAdam(torch.optim.Optimizer):
 
                 exp_avg = state["exp_avg"]
                 exp_avg_sq = state["exp_avg_sq"]
+                w_acc = state["w_acc"]
+
                 state["step"] += 1
                 t = state["step"]
                 # weight decay
@@ -731,8 +742,9 @@ class DistAdam(torch.optim.Optimizer):
                 # compute step
                 denom = exp_avg_sq.sqrt().add_(eps)
                 step_size = lr * (bias2 ** 0.5 / bias1)
-                update = exp_avg.div(denom).mul_(step_size)
-                p_slice.add_(other=update, alpha=-1.0)
+                update = -exp_avg.div(denom).mul_(step_size)
+                #p_slice.add_(other=update, alpha=-1.0)
+                grow_exp_(p_slice, w_acc, update)
 
                 all_gather_futures.append(dist.all_gather_into_tensor(param, p_slice, async_op=True).get_future())
 
