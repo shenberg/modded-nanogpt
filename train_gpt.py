@@ -544,6 +544,7 @@ class NorMuon(torch.optim.Optimizer):
             group["second_momentum_buffer"].zero_()
             group["param_acc"].zero_()
             group["second_momentum_buffer_acc"].zero_()
+            group["momentum_buffer_acc"].zero_()
 
     def generate_standard_param_groups(self, params):
         """
@@ -638,9 +639,17 @@ class NorMuon(torch.optim.Optimizer):
 
             if "momentum_buffer" not in group:
                 group["momentum_buffer"] = torch.zeros_like(grad_chunk[:num_params])
+                group["momentum_buffer_acc"] = torch.zeros_like(grad_chunk[:num_params])
             momentum_buffer = group["momentum_buffer"]
+            momentum_buffer_acc = group["momentum_buffer_acc"]
             # Apply momentum update to the persistent momentum buffer in-place
-            momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
+            # momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
+            # TODO:  hack momentum=beta2
+            beta2_rounded, beta2_correction = group["beta2_mcf"]
+            mult_mc_(momentum_buffer, momentum_buffer_acc, beta2_rounded, beta2_correction)
+            grow_exp_(momentum_buffer, momentum_buffer_acc, grad_chunk[:num_params].to(dtype=second_momentum_buffer.dtype) * (1 - beta2))
+
+            # TODO: maybe also here?
             updated_grads = grad_chunk[:num_params].lerp_(momentum_buffer, group["momentum"])
 
             grad_shape = updated_grads.shape
