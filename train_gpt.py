@@ -865,7 +865,7 @@ class DistAdam(torch.optim.Optimizer):
                 exp_avg.mul_(beta1).add_(g_slice, alpha=1 - beta1)
 
                 mult_mc_(exp_avg_sq, exp_avg_sq_acc, beta2_rounded, beta2_correction)
-                grow_exp_addcmul_(exp_avg_sq, exp_avg_sq_acc, g_slice, g_slice, value=1 - beta2)
+                grow_exp_addcmul_(exp_avg_sq, exp_avg_sq_acc, g_slice, g_slice, 1 - beta2)
                 # bias corrections
                 bias1 = 1 - beta1 ** t
                 bias2 = 1 - beta2 ** t
