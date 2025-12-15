@@ -420,17 +420,26 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
         X = X.mT
     return X
 
+# multi-component float add, assuming |m| > |r| in every cell
+def grow_exp_(tensor_m, tensor_r, val):
+    # tensor_m, tensor_r can be modified in-place
+    result_m = tensor_m + val
+    tensor_r.add_(val - (result_m - tensor_m))
+    tensor_m.copy_(result_m + tensor_r)
+    tensor_r.sub_(tensor_m - result_m)
 
 # -----------------------------------------------------------------------------
 # Compiled helpers for NorMuon by @chrisjmccormick
 
+
 @torch.compile(dynamic=False, fullgraph=True)
-def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
+def cautious_wd_and_update_inplace(p, v, acc, wd_tensor, lr_tensor):
     """Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors."""
     mask = (v * p) >= 0
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
-    p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
+    update = - (p * mask * wd_factor * lr_factor) - (v * lr_factor)
+    grow_exp_(p, acc, update)
     
 
 @torch.compile(dynamic=False, fullgraph=True)
@@ -596,7 +605,7 @@ class NorMuon(torch.optim.Optimizer):
             num_params = min(chunk_size, max(0, len(params) - start_idx))  # num params for this rank
 
             if "momentum_buffer" not in group:
-                group["momentum_buffer"]  = torch.zeros_like(grad_chunk[:num_params])
+                group["momentum_buffer"] = torch.zeros_like(grad_chunk[:num_params])
             momentum_buffer = group["momentum_buffer"]
             # Apply momentum update to the persistent momentum buffer in-place
             momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
@@ -625,6 +634,10 @@ class NorMuon(torch.optim.Optimizer):
                         if param_shape[-2] >= param_shape[-1] else torch.zeros_like(updated_grads[..., :1, :])
                     )
             second_momentum_buffer = group["second_momentum_buffer"]
+
+            if "param_acc" not in group:
+                group["param_acc"] = torch.zeros_like(grad_chunk[:num_params])
+            param_acc = group["param_acc"]
    
             if "param_lr_cpu" not in group:
                 # Define multipliers for ALL params in this group (global, not per-shard)
@@ -678,6 +691,7 @@ class NorMuon(torch.optim.Optimizer):
                     cautious_wd_and_update_inplace(
                         param_chunk[local_idx],
                         v_chunk[local_idx],
+                        param_acc[local_idx],
                         eff_wd_cpu[local_idx],
                         eff_lr_cpu[local_idx],
                     )
@@ -741,7 +755,8 @@ class DistAdam(torch.optim.Optimizer):
             chunk_size = p.size(0) // self.world_size
             exp_avg = torch.zeros_like(p[:chunk_size], dtype=torch.bfloat16, device=p[0].device)
             exp_avg_sq = torch.zeros_like(exp_avg)
-            self.state[p] = dict(step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq)
+            p_acc = torch.zeros_like(exp_avg)
+            self.state[p] = dict(step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq, p_acc=p_acc)
         # DistributedAdam implementation by @vagrawal, @akash5474
 
         self.should_sync = False
@@ -794,6 +809,7 @@ class DistAdam(torch.optim.Optimizer):
 
                 exp_avg = state["exp_avg"]
                 exp_avg_sq = state["exp_avg_sq"]
+                p_acc = state["p_acc"]
                 state["step"] += 1
                 t = state["step"]
                 # weight decay
@@ -810,7 +826,8 @@ class DistAdam(torch.optim.Optimizer):
                 denom = exp_avg_sq.sqrt().add_(eps)
                 step_size = lr * (bias2 ** 0.5 / bias1)
                 update = exp_avg.div(denom).mul_(step_size)
-                p_slice.add_(other=update, alpha=-1.0)
+                grow_exp_(p_slice, p_acc, -update)
+                # p_slice.add_(other=update, alpha=-1.0)
 
                 all_gather_futures.append(dist.all_gather_into_tensor(param, p_slice, async_op=True).get_future())
 
@@ -1388,9 +1405,8 @@ model: nn.Module = GPT(
     model_dim=768,
     max_seq_len=args.val_batch_size // (grad_accum_steps * world_size)
 ).cuda()
-for m in model.modules():
-    if isinstance(m, (nn.Embedding, nn.Linear)):
-        m.bfloat16()
+model.bfloat16()
+
 for param in model.parameters():
     dist.broadcast(param.detach(), 0)
 
