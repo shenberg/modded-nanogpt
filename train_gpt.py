@@ -440,9 +440,10 @@ def grow_exp_addcmul_(tensor_m, tensor_r, t1, t2, v):
 def mult_mc_(tensor_m, tensor_r, val_m, val_r):
     # tensor_m, tensor_r can be modified in-place
     # val_m, val_r are scalars
-    result_m = tensor_m.mul_(val_m)
+    result_m = tensor_m.mul(val_m)
     value = torch.addcmul(-result_m, tensor_m, val_m)
     tensor_r.mul_(val_m).addcmul_(tensor_m, val_r).add_(value)
+    
     tensor_m.copy_(result_m + tensor_r)
     tensor_r.sub_(tensor_m - result_m)
 
@@ -854,7 +855,7 @@ class DistAdam(torch.optim.Optimizer):
                 exp_avg.mul_(beta1).add_(g_slice, alpha=1 - beta1)
 
                 mult_mc_(exp_avg_sq, exp_avg_sq_acc, beta2_rounded, beta2_correction)
-                grow_exp_addcmul_(exp_avg_sq, exp_avg_sq_acc, g_slice, g_slice, 1 - beta2)
+                grow_exp_addcmul_(exp_avg_sq, exp_avg_sq_acc, g_slice, g_slice, 1.0 - beta2)
                 # bias corrections
                 bias1 = 1 - beta1 ** t
                 bias2 = 1 - beta2 ** t
