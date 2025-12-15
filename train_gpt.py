@@ -647,7 +647,7 @@ class NorMuon(torch.optim.Optimizer):
             # TODO:  hack momentum=beta2
             beta2_rounded, beta2_correction = group["beta2_mcf"]
             mult_mc_(momentum_buffer, momentum_buffer_acc, beta2_rounded, beta2_correction)
-            grow_exp_(momentum_buffer, momentum_buffer_acc, grad_chunk[:num_params].to(dtype=second_momentum_buffer.dtype) * (1 - group["momentum"]))
+            grow_exp_(momentum_buffer, momentum_buffer_acc, grad_chunk[:num_params].to(dtype=momentum_buffer.dtype) * (1 - group["momentum"]))
 
             # TODO: maybe also here?
             updated_grads = grad_chunk[:num_params].lerp_(momentum_buffer, group["momentum"])
