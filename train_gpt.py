@@ -518,6 +518,7 @@ class NorMuon(torch.optim.Optimizer):
         for group in self.param_groups:
             group["momentum_buffer"].zero_()
             group["second_momentum_buffer"].zero_()
+            group["param_acc"].zero_()
 
     def generate_standard_param_groups(self, params):
         """
