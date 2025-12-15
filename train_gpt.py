@@ -662,7 +662,7 @@ class NorMuon(torch.optim.Optimizer):
                     group["second_momentum_buffer"] = (torch.zeros_like(updated_grads[..., :, :1])
                         if param_shape[-2] >= param_shape[-1] else torch.zeros_like(updated_grads[..., :1, :])
                     )
-                group["second_momemtum_buffer_acc"] = torch.zeros_like(group["second_momentum_buffer"])
+                group["second_momentum_buffer_acc"] = torch.zeros_like(group["second_momentum_buffer"])
             second_momentum_buffer = group["second_momentum_buffer"]
             second_momentum_buffer_acc = group["second_momentum_buffer_acc"]
 
