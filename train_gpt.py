@@ -457,8 +457,9 @@ def cautious_wd_and_update_inplace(p, v, acc, wd_tensor, lr_tensor):
     mask = (v * p) >= 0
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
-    update = - (p * mask * wd_factor * lr_factor) - (v * lr_factor)
-    grow_exp_(p, acc, update)
+    #update = - (p * mask * wd_factor * lr_factor) - (v * lr_factor)
+    update = torch.addcmul(v, p, mask,value=wd_factor)
+    grow_exp_(p, acc, update * (-lr_factor))
     
 
 @torch.compile(dynamic=False, fullgraph=True)
