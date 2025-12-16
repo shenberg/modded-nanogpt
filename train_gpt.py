@@ -1050,6 +1050,7 @@ class GPT(nn.Module):
         )
 
         self.scalars.label = 'scalars'
+        self.scalars.wd_mul = 0.0 # disable weight decay on scalars
         # set learning rates
         for param in self.embed.parameters():
             param.lr_mul = 75.
