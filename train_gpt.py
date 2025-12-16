@@ -464,16 +464,14 @@ def cautious_wd_and_update_inplace(p, v, acc, wd_tensor, lr_tensor):
     
 
 @torch.compile(dynamic=False, fullgraph=True)
-def apply_normuon_variance_reduction(v_chunk, second_momentum_buffer, second_momentum_buffer_acc,
-                                     beta2, beta2_rounded, beta2_correction, red_dim):
+def apply_normuon_variance_reduction(v_chunk, second_momentum_buffer,
+                                     beta2, red_dim):
     """NorMuon variance reduction. Algebraically fuses the normalization steps to minimize memory ops."""
     v_mean = v_chunk.float().square().mean(dim=red_dim, keepdim=True)
     red_dim_size = v_chunk.size(red_dim)
     v_norm_sq = v_mean.sum(dim=(-2, -1), keepdim=True).mul_(red_dim_size)
     v_norm = v_norm_sq.sqrt_()
-    # second_momentum_buffer.lerp_(v_mean.to(dtype=second_momentum_buffer.dtype), 1 - beta2)
-    mult_mc_(second_momentum_buffer, second_momentum_buffer_acc, beta2_rounded, beta2_correction)
-    grow_exp_(second_momentum_buffer, second_momentum_buffer_acc, v_mean.to(dtype=second_momentum_buffer.dtype) * (1 - beta2))
+    second_momentum_buffer.lerp_(v_mean.to(dtype=second_momentum_buffer.dtype), 1 - beta2)
     step_size = second_momentum_buffer.clamp_min(1e-10).rsqrt_()
     scaled_sq_sum = (v_mean * red_dim_size) * step_size.float().square()
     v_norm_new = scaled_sq_sum.sum(dim=(-2, -1), keepdim=True).sqrt_()
@@ -543,8 +541,6 @@ class NorMuon(torch.optim.Optimizer):
             group["momentum_buffer"].zero_()
             group["second_momentum_buffer"].zero_()
             group["param_acc"].zero_()
-            group["second_momentum_buffer_acc"].zero_()
-            group["momentum_buffer_acc"].zero_()
 
     def generate_standard_param_groups(self, params):
         """
@@ -615,11 +611,6 @@ class NorMuon(torch.optim.Optimizer):
 
             group_infos.append(dict(grad_chunk=grad_chunk, reduce_future=reduce_future))
 
-            if "beta2_mcf" not in group:
-                beta2 = group["beta2"]
-                beta2_rounded = torch.tensor(beta2, dtype=torch.bfloat16).to(params[0])
-                beta2_correction = torch.tensor(beta2 - beta2_rounded.item(), dtype=torch.bfloat16).to(params[0])
-                group["beta2_mcf"] = beta2_rounded, beta2_correction
 
         all_gather_infos = []
         # Second pass: wait for gradients, compute updates for the local shard of parameters,
@@ -638,18 +629,11 @@ class NorMuon(torch.optim.Optimizer):
             num_params = min(chunk_size, max(0, len(params) - start_idx))  # num params for this rank
 
             if "momentum_buffer" not in group:
-                group["momentum_buffer"] = torch.zeros_like(grad_chunk[:num_params])
-                group["momentum_buffer_acc"] = torch.zeros_like(grad_chunk[:num_params])
+                group["momentum_buffer"] = torch.zeros_like(grad_chunk[:num_params], dtype=torch.float32)
             momentum_buffer = group["momentum_buffer"]
-            momentum_buffer_acc = group["momentum_buffer_acc"]
             # Apply momentum update to the persistent momentum buffer in-place
-            # momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
-            # TODO:  hack momentum=beta2
-            beta2_rounded, beta2_correction = group["beta2_mcf"]
-            mult_mc_(momentum_buffer, momentum_buffer_acc, beta2_rounded, beta2_correction)
-            grow_exp_(momentum_buffer, momentum_buffer_acc, grad_chunk[:num_params].to(dtype=momentum_buffer.dtype) * (1 - group["momentum"]))
+            momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
 
-            # TODO: maybe also here?
             updated_grads = grad_chunk[:num_params].lerp_(momentum_buffer, group["momentum"])
 
             grad_shape = updated_grads.shape
@@ -669,14 +653,12 @@ class NorMuon(torch.optim.Optimizer):
             
             if "second_momentum_buffer" not in group:                
                 if is_gate:
-                    group["second_momentum_buffer"] = torch.zeros_like(updated_grads[..., :, :1])
+                    group["second_momentum_buffer"] = torch.zeros_like(updated_grads[..., :, :1], dtype=torch.float32)
                 else:
-                    group["second_momentum_buffer"] = (torch.zeros_like(updated_grads[..., :, :1])
-                        if param_shape[-2] >= param_shape[-1] else torch.zeros_like(updated_grads[..., :1, :])
+                    group["second_momentum_buffer"] = (torch.zeros_like(updated_grads[..., :, :1], dtype=torch.float32)
+                        if param_shape[-2] >= param_shape[-1] else torch.zeros_like(updated_grads[..., :1, :], dtype=torch.float32)
                     )
-                group["second_momentum_buffer_acc"] = torch.zeros_like(group["second_momentum_buffer"])
             second_momentum_buffer = group["second_momentum_buffer"]
-            second_momentum_buffer_acc = group["second_momentum_buffer_acc"]
 
             if "param_acc" not in group:
                 group["param_acc"] = torch.zeros_like(grad_chunk[:num_params])
@@ -720,7 +702,7 @@ class NorMuon(torch.optim.Optimizer):
             
             beta2_rounded, beta2_correction = group["beta2_mcf"]
             v_chunk = apply_normuon_variance_reduction(
-                v_chunk, second_momentum_buffer, second_momentum_buffer_acc, group["beta2"], beta2_rounded, beta2_correction, red_dim
+                v_chunk, second_momentum_buffer, group["beta2"], red_dim
             )
 
             v_chunk = v_chunk.view(grad_shape)
