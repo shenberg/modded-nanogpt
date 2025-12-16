@@ -619,7 +619,7 @@ class NorMuon(torch.optim.Optimizer):
             info["reduce_future"].wait()
 
             params = group["params"]
-            grad_chunk = info["grad_chunk"]
+            grad_chunk = info["grad_chunk"].float()
             chunk_size = group["chunk_size"]
             padded_num_params = chunk_size * self.world_size
 
