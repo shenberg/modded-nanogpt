@@ -661,7 +661,7 @@ class NorMuon(torch.optim.Optimizer):
             second_momentum_buffer = group["second_momentum_buffer"]
 
             if "param_acc" not in group:
-                group["param_acc"] = torch.zeros_like(grad_chunk[:num_params])
+                group["param_acc"] = torch.zeros_like(grad_chunk[:num_params], dtype=torch.bfloat16)
             param_acc = group["param_acc"]
    
             if "param_lr_cpu" not in group:
