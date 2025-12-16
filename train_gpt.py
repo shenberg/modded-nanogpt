@@ -632,9 +632,9 @@ class NorMuon(torch.optim.Optimizer):
                 group["momentum_buffer"] = torch.zeros_like(grad_chunk[:num_params], dtype=torch.float32)
             momentum_buffer = group["momentum_buffer"]
             # Apply momentum update to the persistent momentum buffer in-place
-            momentum_buffer.lerp_(grad_chunk[:num_params], 1 - group["momentum"])
+            momentum_buffer.lerp_(grad_chunk[:num_params].to(momentum_buffer), 1 - group["momentum"])
 
-            updated_grads = grad_chunk[:num_params].lerp_(momentum_buffer, group["momentum"])
+            updated_grads = grad_chunk[:num_params].lerp_(momentum_buffer.to(grad_chunk), group["momentum"])
 
             grad_shape = updated_grads.shape
             if params[module_idx].label == 'attn':
