@@ -965,20 +965,17 @@ class MLP(nn.Module):
         self.c_fc.label = 'mlp'
         self.c_proj.label = 'mlp'
         self.c_proj.lr_mul = 2.
-        self.c_scale = nn.Parameter(torch.empty(1))
-        self.c_scale.label = 'scalar'
 
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
-            self.c_scale.fill_(1.0)
 
-    def forward(self, x: Tensor):
-        x = F.linear(x, self.c_scale * self.c_fc.type_as(x))
+    def forward(self, x: Tensor, scales: Tensor):
+        x = F.linear(x, scales[0] * self.c_fc.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
-        x = F.linear(x, self.c_proj.T.type_as(x))
+        x = F.linear(x, scales[1] * self.c_proj.T.type_as(x))
         return x
 
 class Block(nn.Module):
@@ -994,7 +991,7 @@ class Block(nn.Module):
         if self.attn is not None:
             x = x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = x + self.mlp(norm(x), lambdas[2:])
         return x
 
 # -----------------------------------------------------------------------------
@@ -1029,14 +1026,14 @@ class GPT(nn.Module):
         self.lm_head.weight.label = 'lm_head'
         # Add learnable skip connection weights for decoder layers
         assert num_layers % 2 == 0
-        pad = (-num_layers * 5 - 2) % dist.get_world_size()
+        pad = (-num_layers * 7 - 2) % dist.get_world_size()
         self.scalars = nn.Parameter(
             torch.cat(
                 [
                     -1.5
                     * torch.ones(num_layers),  # skip_weights -> σ(-1.5) ≈ 0.18
                     *[
-                        torch.tensor([1.1, 0.0]) for _ in range(num_layers)
+                        torch.tensor([1.1, 0.0, 0.5, 1.0]) for _ in range(num_layers)
                     ],  # block lambdas. 1.1 init such that layer i weight is i^(num_layers-i).
                         # ~3x higher weight to layer 1 compared to 12 at init.
                     *[
@@ -1075,10 +1072,10 @@ class GPT(nn.Module):
         x = self.embed(input_seq)
 
         skip_weights = self.scalars[:(len(self.blocks) // 2)]
-        lambdas = self.scalars[1 * len(self.blocks): 3 * len(self.blocks)].view(-1, 2)
-        sa_lambdas = self.scalars[3 * len(self.blocks): 5 * len(self.blocks)].view(-1, 2)
-        smear_lambda = self.scalars[5 * len(self.blocks)]
-        backout_lambda = self.scalars[5 * len(self.blocks)+1]
+        lambdas = self.scalars[1 * len(self.blocks): 5 * len(self.blocks)].view(-1, 4)
+        sa_lambdas = self.scalars[5 * len(self.blocks): 7 * len(self.blocks)].view(-1, 2)
+        smear_lambda = self.scalars[7 * len(self.blocks)]
+        backout_lambda = self.scalars[7 * len(self.blocks)+1]
 
         # smear token embed forward 1 position @classiclarryd
         smear_gate_out = smear_lambda * torch.sigmoid(self.smear_gate(x[1:, :self.smear_gate.weight.size(-1)]))
