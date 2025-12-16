@@ -646,7 +646,7 @@ class NorMuon(torch.optim.Optimizer):
                 group["param_wd_cpu"] = torch.tensor(wd_mults, dtype=torch.float32, device="cpu")
 
             eff_lr_all = group["param_lr_cpu"] * group["lr"]
-            eff_wd_all = group["param_wd_cpu"] * group["weight_decay"] * group["lr"]
+            eff_wd_all = group["param_wd_cpu"] * group["weight_decay"]
 
             # Slice the portion corresponding to this rank's shard
             eff_lr_cpu = eff_lr_all[module_idx:module_idx + num_params]
@@ -1411,7 +1411,7 @@ optimizer1 = DistAdam(
     eps=1e-8,
     weight_decay=0.0,
 )
-optimizer2 = NorMuon(hidden_matrix_params + gate_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)
+optimizer2 = NorMuon(hidden_matrix_params + gate_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=0.02)
 optimizers = [optimizer1, optimizer2]
 for opt in optimizers:
     for group in opt.param_groups:
