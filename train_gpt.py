@@ -781,18 +781,10 @@ class DistAdam(torch.optim.Optimizer):
             chunk_size = p.size(0) // self.world_size
             exp_avg = torch.zeros_like(p[:chunk_size], dtype=torch.bfloat16, device=p[0].device)
             exp_avg_sq = torch.zeros_like(exp_avg)
-            exp_avg_sq_acc = torch.zeros_like(exp_avg)
             p_acc = torch.zeros_like(exp_avg)
             self.state[p] = dict(
-                step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq, exp_avg_sq_acc=exp_avg_sq_acc, p_acc=p_acc
+                step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq, p_acc=p_acc
             )
-
-        # split full-accuracy beta2 into MCF bfloat16 format
-        for group in self.param_groups:
-            _, beta2 = group["betas"]
-            beta2_rounded = torch.tensor(beta2, dtype=torch.bfloat16).to(exp_avg)
-            beta2_correction = torch.tensor(beta2 - beta2_rounded.item(), dtype=torch.bfloat16).to(exp_avg)
-            group["beta2"] = beta2_rounded, beta2_correction
 
         # DistributedAdam implementation by @vagrawal, @akash5474
 
@@ -830,7 +822,6 @@ class DistAdam(torch.optim.Optimizer):
 
         for group in self.param_groups:
             beta1, beta2 = group['betas']
-            beta2_rounded, beta2_correction = group["beta2"]
             eps = group['eps']
             wd = group['weight_decay']
             for param in group['params']:
@@ -847,7 +838,6 @@ class DistAdam(torch.optim.Optimizer):
 
                 exp_avg = state["exp_avg"]
                 exp_avg_sq = state["exp_avg_sq"]
-                exp_avg_sq_acc = state["exp_avg_sq_acc"]
                 p_acc = state["p_acc"]
                 state["step"] += 1
                 t = state["step"]
@@ -858,8 +848,9 @@ class DistAdam(torch.optim.Optimizer):
                 # update running averages
                 exp_avg.mul_(beta1).add_(g_slice, alpha=1 - beta1)
 
-                mult_mc_(exp_avg_sq, exp_avg_sq_acc, beta2_rounded, beta2_correction)
-                grow_exp_addcmul_(exp_avg_sq, exp_avg_sq_acc, g_slice, g_slice, 1 - beta2)
+                exp_avg_sq.mul_(beta2)
+                exp_avg_sq.addcmul_(g_slice, g_slice, value=1 - beta2)
+
                 # bias corrections
                 bias1 = 1 - beta1 ** t
                 bias2 = 1 - beta2 ** t
