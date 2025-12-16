@@ -808,7 +808,7 @@ class DistAdam(torch.optim.Optimizer):
                 update = exp_avg.div(denom).mul_(step_size)
                 # weight decay
                 if wd != 0:
-                    mask = update * p_slice >= 0
+                    mask = (update * p_slice) >= 0
                     # lr as weight decay  schedule
                     eff_weight_decay = lr * wd * getattr(param, "wd_mul", 1.0)
 
@@ -1412,7 +1412,7 @@ optimizer1 = DistAdam(
     lr=0.008,
     betas=(0.65, 0.95),
     eps=1e-8,
-    weight_decay=1.2,
+    weight_decay=0.1,
 )
 optimizer2 = NorMuon(hidden_matrix_params + gate_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)
 optimizers = [optimizer1, optimizer2]
