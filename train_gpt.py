@@ -700,7 +700,6 @@ class NorMuon(torch.optim.Optimizer):
             # is 'incorrect' for O. However, correcting this showed no improvement. @chrisjmccormick 
             red_dim = -1 if (is_gate or param_shape[-2] >= param_shape[-1]) else -2
             
-            beta2_rounded, beta2_correction = group["beta2_mcf"]
             v_chunk = apply_normuon_variance_reduction(
                 v_chunk, second_momentum_buffer, group["beta2"], red_dim
             )
