@@ -920,7 +920,7 @@ class CausalSelfAttention(nn.Module):
         self.qkvo_w.label = 'attn'
 
         with torch.no_grad():
-            self.qkvo_w[:self.dim * 3].uniform_(-bound*0.5, bound*0.5)  # init QKV weights
+            self.qkvo_w[:self.dim * 3].uniform_(-bound*0.5, bound)  # init QKV weights
             self.qkvo_w[self.dim * 3:].zero_()  # init O weights to zero
 
         # sparse gated attention to enable context based no-op by @classiclarryd
@@ -936,7 +936,7 @@ class CausalSelfAttention(nn.Module):
         ve, sa_lambdas = attn_args.ve, attn_args.sa_lambdas
         seqlens, attn_scale, bm_size = attn_args.seqlens, attn_args.attn_scale, attn_args.bm_size
 
-        q, k, v = F.linear(x, self.qkvo_w[:self.dim * 3].type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
+        q, k, v = F.linear(x, sa_lambdas[0] * self.qkvo_w[:self.dim * 3].type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if ve is not None:
@@ -949,7 +949,7 @@ class CausalSelfAttention(nn.Module):
                                                         max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                         causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
         y = y.view(B, T, self.num_heads, self.head_dim)
-        y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
+        y = y * (sa_lambdas[1] * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1))
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
         y = F.linear(y, self.qkvo_w[self.dim * 3:].type_as(y))  
         return y
