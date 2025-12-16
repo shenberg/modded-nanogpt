@@ -949,9 +949,9 @@ class CausalSelfAttention(nn.Module):
                                                         max_seqlen_q=max_len, max_seqlen_k=max_len,
                                                         causal=True, softmax_scale=attn_scale, window_size=(bm_size, 0))
         y = y.view(B, T, self.num_heads, self.head_dim)
-        y = y * (sa_lambdas[1] * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1))
+        y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
-        y = F.linear(y, self.qkvo_w[self.dim * 3:].type_as(y))  
+        y = F.linear(y, sa_lambdas[1] * self.qkvo_w[self.dim * 3:].type_as(y))
         return y
 
 class MLP(nn.Module):
@@ -964,16 +964,19 @@ class MLP(nn.Module):
         # label all modules for explicit optimizer grouping
         self.c_fc.label = 'mlp'
         self.c_proj.label = 'mlp'
-        self.c_proj.lr_mul = 2. 
+        self.c_proj.lr_mul = 2.
+        self.c_scale = nn.Parameter(torch.empty(1))
+        self.c_scale.label = 'scalar'
 
         std = 0.5 * (dim ** -0.5)
         bound = (3 ** 0.5) * std # improved init scale by @YouJiacheng
         with torch.no_grad():
             self.c_fc.uniform_(-bound, bound)
             self.c_proj.zero_() # zero init suggested by @Grad62304977
+            self.c_scale.fill_(1.0)
 
     def forward(self, x: Tensor):
-        x = F.linear(x, self.c_fc.type_as(x))
+        x = F.linear(x, self.c_scale * self.c_fc.type_as(x))
         x = F.relu(x).square() # https://arxiv.org/abs/2109.08668v2; ~1-2% better than GELU; suggested by @SKYLINEZ007 and @Grad62304977
         x = F.linear(x, self.c_proj.T.type_as(x))
         return x
