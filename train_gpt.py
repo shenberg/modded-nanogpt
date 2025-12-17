@@ -656,8 +656,10 @@ class NorMuon(torch.optim.Optimizer):
             if num_params == 0:
                 v_chunk = updated_grads
             else:
-                threshold = updated_grads.view(updated_grads.shape[0],-1).abs().float().quantile(0.9)
-                updated_grads.sub_(F.softshrink(updated_grads, threshold))
+                # threshold = updated_grads.view(updated_grads.shape[0],-1).abs().float().quantile(0.9)
+                # threshold = updated_grads.view(updated_grads.shape[0],-1).abs()
+
+                # updated_grads.sub_(F.softshrink(updated_grads, threshold))
                 v_chunk = polar_express(updated_grads, split_baddbmm=(ref_param.label == 'mlp'))
 
             # Note that the head orientation in O is transposed relative to QKV, so red_dim
