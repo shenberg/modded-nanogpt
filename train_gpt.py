@@ -801,7 +801,7 @@ class DistAdam(torch.optim.Optimizer):
                 step_size = lr * (bias2 ** 0.5 / bias1)
                 update = exp_avg.div(denom).mul_(step_size)
                 # cautious weight decay
-                mask = (update * p_slice) >= 0
+                mask = (update * p_slice) >= 0 & (update.abs() > 1e-4)
                 # lr as weight decay schedule
                 eff_weight_decay = lr * wd * getattr(param, "wd_mul", 1.0)
                 update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
