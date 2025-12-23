@@ -800,10 +800,13 @@ class DistAdam(torch.optim.Optimizer):
                 denom = exp_avg_sq.sqrt().add_(eps)
                 step_size = lr * (bias2 ** 0.5 / bias1)
                 update = exp_avg.div(denom).mul_(step_size)
-                # cautious weight decay
-                mask = (update * p_slice) >= 0 & (update.abs() > 1e-4)
+
                 # lr as weight decay schedule
                 eff_weight_decay = lr * wd * getattr(param, "wd_mul", 1.0)
+                # cautious weight decay
+                #mask = (update * p_slice) >= 0
+                mask = (update * p_slice * eff_weight_decay * lr) >= update.square()
+
                 update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
 
                 p_slice.add_(other=update, alpha=-1.0)
@@ -1120,7 +1123,7 @@ class GPT(nn.Module):
         logits = self.lm_head(x)
         # @Grad62304977 added tanh softcapping following Gemma 2 paper, @KoszarskyB reduced it from 30 to 15, @YouJiacheng shifted it by +15 (2*sigmoid(2*x)=tanh(x)+1)
         logits = 30 * torch.sigmoid(logits / 7.5)
-        logits_for_loss = logits.float()*1.1 if not self.training else logits
+        logits_for_loss = logits.float() if not self.training else logits
         loss = F.cross_entropy(
             logits_for_loss.view(-1, logits_for_loss.size(-1)),
             target_seq,
