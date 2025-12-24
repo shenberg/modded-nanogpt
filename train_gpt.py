@@ -805,8 +805,7 @@ class DistAdam(torch.optim.Optimizer):
                 eff_weight_decay = lr * wd * getattr(param, "wd_mul", 1.0)
                 # cautious weight decay
                 #mask = (update * p_slice) >= 0
-                mask = (update * p_slice * eff_weight_decay * lr) >= update.square()
-
+                mask = ((update * p_slice) >= 0) & ((p_slice - update).abs() > (p_slice*(eff_weight_decay * lr)).abs())
                 update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
 
                 p_slice.add_(other=update, alpha=-1.0)
