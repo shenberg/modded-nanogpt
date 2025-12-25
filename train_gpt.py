@@ -826,11 +826,11 @@ class DistAdam(torch.optim.Optimizer):
                 # if update < 0, p_slice > 0 so -update >= p_slice * (wd*lr) <==> update <= -p_slice * (wd*lr)
                 # if update > 0, p_slice < 0 so update >= -p_slice * (wd*lr)
                 # in both cases, if we multiply both sides by p_slice, we get update*p_slice <= -p_slice^2 * (wd*lr)
-                # mask = ((update * p_slice) > 0) | ((update * p_slice) < p_slice.square() * (-eff_weight_decay * lr))
-                # update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
-                update_wd = update + p_slice * eff_weight_decay
+                mask = ((update * p_slice) > 0) | ((update * p_slice) < p_slice.square() * (-eff_weight_decay * lr))
+                update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
+                # update_wd = update + p_slice * eff_weight_decay
 
-                update = torch.where(update*update_wd > 0 , update_wd, update)
+                # update = torch.where(update*update_wd > 0 , update_wd, update)
 
                 p_slice.add_(other=update, alpha=-1.0)
 
