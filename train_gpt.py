@@ -427,10 +427,16 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
 @torch.compile(dynamic=False, fullgraph=True)
 def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
     """Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors."""
-    mask = (v * p) >= 0
+    # mask = (v * p) >= 0
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
-    p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
+    # p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
+
+    update_wd = v + p*wd_factor
+
+    update = torch.where(v*update_wd > 0 , update_wd, v)
+    p.copy_(p - update * lr_factor)
+
 
 
 @torch.compile(dynamic=False, fullgraph=True)
@@ -826,11 +832,11 @@ class DistAdam(torch.optim.Optimizer):
                 # if update < 0, p_slice > 0 so -update >= p_slice * (wd*lr) <==> update <= -p_slice * (wd*lr)
                 # if update > 0, p_slice < 0 so update >= -p_slice * (wd*lr)
                 # in both cases, if we multiply both sides by p_slice, we get update*p_slice <= -p_slice^2 * (wd*lr)
-                mask = ((update * p_slice) > 0) | ((update * p_slice) < p_slice.square() * (-eff_weight_decay * lr))
-                update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
-                # update_wd = update + p_slice * eff_weight_decay
+                # mask = ((update * p_slice) > 0) | ((update * p_slice) < p_slice.square() * (-eff_weight_decay * lr))
+                # update.addcmul_(p_slice, mask, value=eff_weight_decay * lr)
+                update_wd = update + p_slice * eff_weight_decay
 
-                # update = torch.where(update*update_wd > 0 , update_wd, update)
+                update = torch.where(update*update_wd > 0 , update_wd, update)
 
                 p_slice.add_(other=update, alpha=-1.0)
 
