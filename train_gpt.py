@@ -1477,7 +1477,7 @@ adam_optimizers = [
     DistAdam(adam_params, adam_labels, lr=0.008, betas=(0.65, 0.95), eps=1e-8, weight_decay=0.005),
     DistAdam(scalar_params, scalar_labels, lr=0.008, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.005),  # higher betas for smoothing
 ]
-muon_optimizers = [NorMuon(muon_params, muon_labels, muon_group_sizes, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)]
+muon_optimizers = [NorMuon(muon_params, muon_labels, muon_group_sizes, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=0.8)]
 optimizers = adam_optimizers + muon_optimizers
 for opt in optimizers:
     for group in opt.param_groups:
