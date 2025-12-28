@@ -936,13 +936,13 @@ class CausalSelfAttention(nn.Module):
         # merged QKVO weights: suggested by many, implemented by @fernbear.bsky.social, and further improved by @YouJiacheng
         # https://x.com/hi_tysam/status/1879699187107033311
         # Simplified layout by @chrisjmccormick
-        self.qkvo_w = nn.Parameter(torch.empty(self.dim * 4, self.hdim))
+        self.qko_w = nn.Parameter(torch.empty(self.dim * 4, self.hdim))
         # label all modules for explicit optimizer grouping
-        self.qkvo_w.label = 'attn'
+        self.qko_w.label = 'attn'
 
         with torch.no_grad():
-            self.qkvo_w[:self.dim * 3].uniform_(-bound, bound)  # init QKV weights
-            self.qkvo_w[self.dim * 3:].zero_()  # init O weights to zero
+            self.qko_w[:self.dim * 2].uniform_(-bound, bound)  # init QKV weights
+            self.qko_w[self.dim * 2:].zero_()  # init O weights to zero
 
         # sparse gated attention to enable context based no-op by @classiclarryd
         self.attn_gate = CastedLinear(12, num_heads)
@@ -956,8 +956,9 @@ class CausalSelfAttention(nn.Module):
         cos, sin = attn_args.cos, attn_args.sin
         ve, sa_lambdas, key_offset = attn_args.ve, attn_args.sa_lambdas, attn_args.key_offset
         seqlens, attn_scale, bm_size = attn_args.seqlens, attn_args.attn_scale, attn_args.bm_size
+        v = x * sa_lambdas[0]
 
-        q, k, v = F.linear(x, sa_lambdas[0] * self.qkvo_w[:self.dim * 3].type_as(x)).view(B, T, 3 * self.num_heads, self.head_dim).chunk(3, dim=-2)
+        q, k = F.linear(x, self.qko_w[:self.dim * 2].type_as(x)).view(B, T, 2 * self.num_heads, self.head_dim).chunk(2, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
         q, k = rotary(q, cos, sin), rotary(k, cos, sin)
         if key_offset:
@@ -976,7 +977,7 @@ class CausalSelfAttention(nn.Module):
         y = y.view(B, T, self.num_heads, self.head_dim)
         y = y * torch.sigmoid(self.attn_gate(x[..., :self.attn_gate.weight.size(-1)])).view(B, T, self.num_heads, 1)
         y = y.contiguous().view(B, T, self.num_heads * self.head_dim) # re-assemble all head outputs side by side
-        y = F.linear(y, sa_lambdas[1] * self.qkvo_w[self.dim * 3:].type_as(y))  # sa_lambdas[1] pre-multiplied to O @shenberg
+        y = F.linear(y, sa_lambdas[1] * self.qko_w[self.dim * 2:].type_as(y))  # sa_lambdas[1] pre-multiplied to O @shenberg
         return y
 
 class MLP(nn.Module):
