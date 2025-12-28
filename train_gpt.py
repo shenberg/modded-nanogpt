@@ -956,7 +956,7 @@ class CausalSelfAttention(nn.Module):
         cos, sin = attn_args.cos, attn_args.sin
         ve, sa_lambdas, key_offset = attn_args.ve, attn_args.sa_lambdas, attn_args.key_offset
         seqlens, attn_scale, bm_size = attn_args.seqlens, attn_args.attn_scale, attn_args.bm_size
-        v = x * sa_lambdas[0]
+        v = (x * sa_lambdas[0]).view(B, T, self.num_heads, self.head_dim)
 
         q, k = F.linear(x, self.qko_w[:self.dim * 2].type_as(x)).view(B, T, 2 * self.num_heads, self.head_dim).chunk(2, dim=-2)
         q, k = norm(q), norm(k) # QK norm @Grad62304977
