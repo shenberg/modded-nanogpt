@@ -936,7 +936,7 @@ class CausalSelfAttention(nn.Module):
         # merged QKVO weights: suggested by many, implemented by @fernbear.bsky.social, and further improved by @YouJiacheng
         # https://x.com/hi_tysam/status/1879699187107033311
         # Simplified layout by @chrisjmccormick
-        self.qko_w = nn.Parameter(torch.empty(self.dim * 4, self.hdim))
+        self.qko_w = nn.Parameter(torch.empty(self.dim * 3, self.hdim))
         # label all modules for explicit optimizer grouping
         self.qko_w.label = 'attn'
 
