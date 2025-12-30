@@ -428,7 +428,7 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
 def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
     """Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors."""
     # mask = (v * p) >= 0
-    wd_scale = (v * p).sum(dim=(-2,-1), keepdims=True) / v.square().sum(dim=(-2,-1), keepdims=True)
+    wd_scale = (v * p).sum(dim=(-2,-1), keepdims=True) / (v.square().sum(dim=(-2,-1), keepdims=True) + 1e-8)
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
     p.copy_(p - (v * (1 - wd_factor * wd_scale) * lr_factor))
