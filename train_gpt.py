@@ -434,7 +434,7 @@ def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
     # p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
-    p.copy_(p - (v * (1 - wd_factor * wd_scale) * lr_factor))
+    p.copy_(p - (v * (1 + wd_factor * wd_scale) * lr_factor))
 
 
 @torch.compile(dynamic=False, fullgraph=True)
