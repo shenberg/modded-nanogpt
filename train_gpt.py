@@ -671,7 +671,7 @@ class NorMuon(torch.optim.Optimizer):
                 # Work on a stacked copy to avoid touching original params
                 param_chunk = torch.stack(params[module_idx:module_idx + num_params]).view_as(v_chunk)
 
-                if params[0].label != 'attn':
+                if params[module_idx].label != 'attn':
                     for local_idx in range(num_params):
                         cautious_wd_and_update_inplace(
                             param_chunk[local_idx],
