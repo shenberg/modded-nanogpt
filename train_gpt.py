@@ -429,11 +429,12 @@ def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
     """Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors."""
     # mask = torch.clamp((v * p) / (p.square() + 1e-8), min=0, max=1)
     # mask = (v * p) >= 0
-    mask = (v * p).sum(dim=(-2,-1), keepdims=True) > 0
-    # wd_scale = (v * p).sum(dim=(-2,-1), keepdims=True) / v.square().sum(dim=(-2,-1), keepdims=True)
+    # mask = (v * p).sum(dim=(-2,-1), keepdims=True) > 0
+    wd_scale = (v * p).sum(dim=(-2,-1), keepdims=True) / (v.square().sum(dim=(-2,-1), keepdims=True) + 1e-8)
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
-    p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
+    # p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
+    p.copy_(p - (v * (1 - wd_factor * wd_scale) * lr_factor))
 
 
 @torch.compile(dynamic=False, fullgraph=True)
