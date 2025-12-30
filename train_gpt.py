@@ -428,14 +428,10 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
 def cautious_wd_and_update_inplace(p, v, wd_tensor, lr_tensor):
     """Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors."""
     # mask = (v * p) >= 0
+    mask = (v * p).sum(dim=(-2,-1), keepdims=True) > 0
     wd_factor = wd_tensor.to(p.dtype)
     lr_factor = lr_tensor.to(p.dtype)
-    # p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
-
-    update_wd = v + p*wd_factor
-
-    update = torch.where(v*update_wd > 0 , update_wd, v)
-    p.copy_(p - update * lr_factor)
+    p.copy_(p - (p * mask * wd_factor * lr_factor) - (v * lr_factor))
 
 
 
@@ -664,13 +660,13 @@ class NorMuon(torch.optim.Optimizer):
                 v_chunk, second_momentum_buffer, group["beta2"], red_dim
             )
 
-            v_chunk = v_chunk.view(grad_shape)
+            # v_chunk = v_chunk.view(grad_shape)
 
             # # "Cautious" weight decay (https://arxiv.org/abs/2510.12402)
             updated_params = torch.empty_like(grad_chunk)
             if num_params > 0:
                 # Work on a stacked copy to avoid touching original params
-                param_chunk = torch.stack(params[module_idx:module_idx + num_params])
+                param_chunk = torch.stack(params[module_idx:module_idx + num_params]).view_as(v_chunk)
 
                 for local_idx in range(num_params):
                     cautious_wd_and_update_inplace(
@@ -681,6 +677,7 @@ class NorMuon(torch.optim.Optimizer):
                     )
             else:
                 param_chunk = torch.zeros_like(v_chunk)
+            param_chunk = param_chunk.view(grad_shape)
 
             updated_params[:num_params].copy_(param_chunk)
             if num_params < chunk_size:
