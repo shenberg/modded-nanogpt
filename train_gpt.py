@@ -671,13 +671,23 @@ class NorMuon(torch.optim.Optimizer):
                 # Work on a stacked copy to avoid touching original params
                 param_chunk = torch.stack(params[module_idx:module_idx + num_params]).view_as(v_chunk)
 
-                for local_idx in range(num_params):
-                    cautious_wd_and_update_inplace(
-                        param_chunk[local_idx],
-                        v_chunk[local_idx],
-                        eff_wd_cpu[local_idx],
-                        eff_lr_cpu[local_idx],
-                    )
+                if params[0].label != 'attn':
+                    for local_idx in range(num_params):
+                        cautious_wd_and_update_inplace(
+                            param_chunk[local_idx],
+                            v_chunk[local_idx],
+                            eff_wd_cpu[local_idx],
+                            eff_lr_cpu[local_idx],
+                        )
+                else:
+                    for local_idx in range(num_params*4):
+                        cautious_wd_and_update_inplace(
+                            param_chunk[local_idx],
+                            v_chunk[local_idx],
+                            eff_wd_cpu[local_idx // 4],
+                            eff_lr_cpu[local_idx // 4],
+                        )
+
             else:
                 param_chunk = torch.zeros_like(v_chunk)
             param_chunk = param_chunk.view(grad_shape)
