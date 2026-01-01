@@ -1463,8 +1463,8 @@ class TrainingManager():
         muon_params = [p for p in model.parameters() if getattr(p, 'label', None) in muon_labels]
         assert set(getattr(p, 'label', None) for p in model.parameters()) == set(adam_labels + scalar_labels + muon_labels), "All params must have label"
 
-        self.adam_opt = DistAdam(adam_params, adam_labels, lr=0.008, betas=(0.65, 0.95), eps=1e-8, weight_decay=0.005)
-        self.scalar_opt = DistAdam(scalar_params, scalar_labels, lr=0.008, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.005)
+        self.adam_opt = DistAdam(adam_params, adam_labels, lr=0.008, betas=(0.65, 0.95), eps=1e-8, weight_decay=0.003)
+        self.scalar_opt = DistAdam(scalar_params, scalar_labels, lr=0.008, betas=(0.9, 0.99), eps=1e-8, weight_decay=0.003)
         self.muon_opt = NorMuon(muon_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)
         self.optimizers = [self.adam_opt, self.scalar_opt, self.muon_opt]
         # split after odd number step
