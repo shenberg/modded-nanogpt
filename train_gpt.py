@@ -1040,7 +1040,7 @@ class Block(nn.Module):
         self.residual_gate2.weight.lr_mul = 0.05
         self.residual_gate2.weight.wd_mul = 0.0
         self.residual_gate2.reset_parameters()
-        self.residual_biases = nn.Parameter(torch.ones(2, dtype=torch.bfloat16))
+        self.residual_biases = nn.Parameter(torch.tensor([1., 0., 1., 0.], dtype=torch.bfloat16))
         self.residual_biases.label = 'residual_gate'
         self.residual_biases.lr_mul = 5.0
         self.residual_biases.wd_mul = 0.0
@@ -1048,9 +1048,9 @@ class Block(nn.Module):
 
     def forward(self, x: Tensor, attn_args: AttnArgs):
         if self.attn is not None:
-            x = (self.residual_biases[0] + torch.tanh(self.residual_gate1(x[..., -12:]))) * x + self.attn(norm(x), attn_args)
+            x = (self.residual_biases[0] + self.residual_biases[1] * torch.tanh(self.residual_gate1(x[..., -12:]))) * x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = (self.residual_biases[1] + torch.tanh(self.residual_gate2(x[..., -12:]))) * x + self.mlp(norm(x))
+            x = (self.residual_biases[2] + self.residual_biases[3] * torch.tanh(self.residual_gate2(x[..., -12:]))) * x + self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
