@@ -1030,12 +1030,27 @@ class Block(nn.Module):
         self.attn = CausalSelfAttention(dim, head_dim, num_heads, layer_idx) if layer_idx != 6 else None
         # skip MLP blocks for first MLP layer by @EmelyanenkoK
         self.mlp = MLP(dim)
+        self.residual_gate1 = CastedLinear(12,1)
+        self.residual_gate1.weight.label = 'residual_gate'
+        self.residual_gate1.weight.lr_mul = 0.05
+        self.residual_gate1.weight.wd_mul = 0.0
+        self.residual_gate1.reset_parameters()
+        self.residual_gate2 = CastedLinear(12,1)
+        self.residual_gate2.weight.label = 'residual_gate'
+        self.residual_gate2.weight.lr_mul = 0.05
+        self.residual_gate2.weight.wd_mul = 0.0
+        self.residual_gate2.reset_parameters()
+        self.residual_biases = nn.Parameter(torch.ones(2, dtype=torch.bfloat16))
+        self.residual_biases.label = 'residual_gate'
+        self.residual_biases.lr_mul = 5.0
+        self.residual_biases.wd_mul = 0.0
+
 
     def forward(self, x: Tensor, attn_args: AttnArgs):
         if self.attn is not None:
-            x = x + self.attn(norm(x), attn_args)
+            x = (self.residual_biases[0] + torch.tanh(self.residual_gate1(x[..., :12]))) * x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = x + self.mlp(norm(x))
+            x = (self.residual_biases[1] + torch.tanh(self.residual_gate2(x[..., :12]))) * x + self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
@@ -1066,12 +1081,6 @@ class GPT(nn.Module):
         self.skip_gate.weight.lr_mul = 0.05
         self.skip_gate.weight.wd_mul = 0.0
 
-        self.residutal_gates = nn.ModuleList([CastedLinear(12,1) for _ in range(num_layers - 1)])
-        for rg in self.residutal_gates:
-            rg.weight.label = 'residual_gate'
-            rg.weight.lr_mul = 0.05
-            rg.weight.wd_mul = 0.0
-            rg.reset_parameters()
 
         # token value embeddings by @KoszarskyB - inspired by @Grad62304977's value residual implementation following https://arxiv.org/abs/2410.17897
         # value embedding code simplification inspired by @ragulpr https://github.com/KellerJordan/modded-nanogpt/pull/78
@@ -1106,12 +1115,12 @@ class GPT(nn.Module):
         self.x0_lambdas.lr_mul = 5.0
         self.x0_lambdas.wd_mul = 0.0
 
-        pad = (-num_layers * 4 - 3) % dist.get_world_size()  # updated: 3*num_layers instead of 4*
+        pad = (-num_layers * 3 - 3) % dist.get_world_size()  # updated: 3*num_layers instead of 4*
         self.scalars = nn.Parameter(
             torch.cat(
                 [
-                    # 1.1 * torch.ones(num_layers),  # resid lambdas. 1.1 init such that layer i weight is i^(num_layers-i).
-                    *[torch.tensor([1.1, 1.0]) for _ in range(num_layers)],  # resid lambdas with gate lambda
+                    1.1 * torch.ones(num_layers),  # resid lambdas. 1.1 init such that layer i weight is i^(num_layers-i).
+                    # *[torch.tensor([1.1, 1.0]) for _ in range(num_layers)],  # resid lambdas with gate lambda
                     *[torch.tensor([0.5, 1.0]) for _ in range(num_layers)],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
