@@ -1491,7 +1491,7 @@ class TrainingManager():
         self.mtp_weights_schedule = self._build_mtp_schedule()
         self.model = model
 
-        adam_labels = ['lm_head', 'value_embed', 'smear_gate', 'attn_gate_bank', 've_gate_bank', 'skip_gate', 'x0_lambdas', 'embed', 'residual_gate']
+        adam_labels = ['lm_head', 'value_embed', 'smear_gate', 'attn_gate_bank', 've_gate_bank', 'skip_gate', 'x0_lambdas', 'residual_gate', 'embed']
         scalar_labels = ['scalars']
         muon_labels = ['attn', 'mlp']
         adam_params = [p for p in model.parameters() if getattr(p, 'label', None) in adam_labels]
