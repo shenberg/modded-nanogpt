@@ -1106,7 +1106,7 @@ class GPT(nn.Module):
         self.x0_lambdas.lr_mul = 5.0
         self.x0_lambdas.wd_mul = 0.0
 
-        pad = (-num_layers * 3 - 3) % dist.get_world_size()  # updated: 3*num_layers instead of 4*
+        pad = (-num_layers * 4 - 3) % dist.get_world_size()  # updated: 3*num_layers instead of 4*
         self.scalars = nn.Parameter(
             torch.cat(
                 [
@@ -1206,7 +1206,7 @@ class GPT(nn.Module):
             if i == 0:
                 x = (resid_lambdas[0, 0] + x0_lambdas[0]) * x
             else:
-                x = (resid_lambdas[i, 0] + resid_lambdas[i, 1] * torch.tanh(self.residutal_gates[i - 1](x[..., :12]))) * x + x0_lambdas[i] * x0
+                x = resid_lambdas[i, 0] * x + (x0_lambdas[i] + resid_lambdas[i, 1] * torch.tanh(self.residutal_gates[i - 1](x[..., :12]))) * x0
             x = self.blocks[i](x, attn_args)
             if i in skip_in:
                 skip_connections.append(x)
