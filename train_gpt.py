@@ -1048,9 +1048,9 @@ class Block(nn.Module):
 
     def forward(self, x: Tensor, attn_args: AttnArgs):
         if self.attn is not None:
-            x = (self.residual_biases[0] + torch.tanh(self.residual_gate1(x[..., :12]))) * x + self.attn(norm(x), attn_args)
+            x = (self.residual_biases[0] + torch.tanh(self.residual_gate1(x[..., -12:]))) * x + self.attn(norm(x), attn_args)
         if self.mlp is not None:
-            x = (self.residual_biases[1] + torch.tanh(self.residual_gate2(x[..., :12]))) * x + self.mlp(norm(x))
+            x = (self.residual_biases[1] + torch.tanh(self.residual_gate2(x[..., -12:]))) * x + self.mlp(norm(x))
         return x
 
 # -----------------------------------------------------------------------------
