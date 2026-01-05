@@ -1071,6 +1071,7 @@ class GPT(nn.Module):
             rg.weight.label = 'residual_gate'
             rg.weight.lr_mul = 0.05
             rg.weight.wd_mul = 0.0
+            rg.reset_parameters()
 
         # token value embeddings by @KoszarskyB - inspired by @Grad62304977's value residual implementation following https://arxiv.org/abs/2410.17897
         # value embedding code simplification inspired by @ragulpr https://github.com/KellerJordan/modded-nanogpt/pull/78
