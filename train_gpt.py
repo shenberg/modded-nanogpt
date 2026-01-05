@@ -1066,6 +1066,12 @@ class GPT(nn.Module):
         self.skip_gate.weight.lr_mul = 0.05
         self.skip_gate.weight.wd_mul = 0.0
 
+        self.residutal_gates = nn.ModuleList([CastedLinear(12,1) for i in range(num_layers - 1)])
+        for rg in self.residutal_gates:
+            rg.weight.label = 'residual_gate'
+            rg.weight.lr_mul = 0.05
+            rg.weight.wd_mul = 0.0
+
         # token value embeddings by @KoszarskyB - inspired by @Grad62304977's value residual implementation following https://arxiv.org/abs/2410.17897
         # value embedding code simplification inspired by @ragulpr https://github.com/KellerJordan/modded-nanogpt/pull/78
         self.value_embeds = nn.ModuleList([nn.Embedding(vocab_size, model_dim) for _ in range(3)])
@@ -1103,7 +1109,8 @@ class GPT(nn.Module):
         self.scalars = nn.Parameter(
             torch.cat(
                 [
-                    1.1 * torch.ones(num_layers),  # resid lambdas. 1.1 init such that layer i weight is i^(num_layers-i).
+                    # 1.1 * torch.ones(num_layers),  # resid lambdas. 1.1 init such that layer i weight is i^(num_layers-i).
+                    *[torch.tensor([1.1, 1.0]) for _ in range(num_layers)],  # resid lambdas with gate lambda
                     *[torch.tensor([0.5, 1.0]) for _ in range(num_layers)],  # SA lambdas
                     torch.zeros(1), # smear_lambda
                     0.5*torch.ones(1), # backout_lambda
@@ -1141,12 +1148,12 @@ class GPT(nn.Module):
         backout_layer = 7
 
         # set lambdas
-        resid_lambdas = self.scalars[: 1 * self.num_layers]
+        resid_lambdas = self.scalars[: 2 * self.num_layers].view(-1, 2)
         x0_lambdas = self.x0_lambdas
-        sa_lambdas = self.scalars[1 * self.num_layers: 3 * self.num_layers].view(-1, 2)
-        smear_lambda = self.scalars[3 * self.num_layers]
-        backout_lambda = self.scalars[3 * self.num_layers+1]
-        skip_lambda = self.scalars[3 * self.num_layers+2]
+        sa_lambdas = self.scalars[2 * self.num_layers: 4 * self.num_layers].view(-1, 2)
+        smear_lambda = self.scalars[4 * self.num_layers]
+        backout_lambda = self.scalars[4 * self.num_layers+1]
+        skip_lambda = self.scalars[4 * self.num_layers+2]
 
         # set block masks and key shift
         short_bm = ws_short * args.block_size
@@ -1198,7 +1205,7 @@ class GPT(nn.Module):
             if i == 0:
                 x = (resid_lambdas[0] + x0_lambdas[0]) * x
             else:
-                x = resid_lambdas[i] * x + x0_lambdas[i] * x0
+                x = (resid_lambdas[i, 0] + resid_lambdas[i, 1] * torch.tanh(self.residutal_gates[i - 1](x[..., :12]))) * x + x0_lambdas[i] * x0
             x = self.blocks[i](x, attn_args)
             if i in skip_in:
                 skip_connections.append(x)
