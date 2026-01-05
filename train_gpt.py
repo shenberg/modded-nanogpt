@@ -1066,7 +1066,7 @@ class GPT(nn.Module):
         self.skip_gate.weight.lr_mul = 0.05
         self.skip_gate.weight.wd_mul = 0.0
 
-        self.residutal_gates = nn.ModuleList([CastedLinear(12,1) for i in range(num_layers - 1)])
+        self.residutal_gates = nn.ModuleList([CastedLinear(12,1) for _ in range(num_layers - 1)])
         for rg in self.residutal_gates:
             rg.weight.label = 'residual_gate'
             rg.weight.lr_mul = 0.05
@@ -1491,7 +1491,7 @@ class TrainingManager():
         self.mtp_weights_schedule = self._build_mtp_schedule()
         self.model = model
 
-        adam_labels = ['lm_head', 'value_embed', 'smear_gate', 'attn_gate_bank', 've_gate_bank', 'skip_gate', 'x0_lambdas', 'embed']
+        adam_labels = ['lm_head', 'value_embed', 'smear_gate', 'attn_gate_bank', 've_gate_bank', 'skip_gate', 'x0_lambdas', 'embed', 'residual_gate']
         scalar_labels = ['scalars']
         muon_labels = ['attn', 'mlp']
         adam_params = [p for p in model.parameters() if getattr(p, 'label', None) in adam_labels]
