@@ -438,8 +438,9 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     lr_factor = lr_tensor.to(torch.float32)
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
+    p_precise.copy_(p_precise - (grad * lr_factor))
     mask = (grad * p_precise) >= 0
-    p_precise.copy_(p_precise - (p_precise * mask * wd_factor * lr_factor) - (grad * lr_factor))
+    p_precise.copy_(p_precise - (p_precise * mask * wd_factor * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
 
