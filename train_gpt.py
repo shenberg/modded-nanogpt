@@ -845,10 +845,10 @@ class DistAdam(torch.optim.Optimizer):
         exp_avg_sq.mul_(beta2).addcmul_(g_slice, g_slice, value=1 - beta2)  # exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * g_slice^2
         # compute step
         update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
+        p_slice.add_(other=update, alpha=-1.0)  # p_slice -= update
         # cautious weight decay
         mask = (update * p_slice) > 0
-        update.addcmul_(p_slice, mask, value=eff_wd_t)  # update += eff_wd_t * p_slice * mask
-        p_slice.add_(other=update, alpha=-1.0)  # p_slice -= update
+        p_slice.addcmul_(p_slice, mask, value=-eff_wd_t)  # p_slice += eff_wd_t * p_slice * mask
 
     @torch.no_grad()
     def step(self, muon_opt):
