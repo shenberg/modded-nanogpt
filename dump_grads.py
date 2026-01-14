@@ -2106,7 +2106,7 @@ for step in range(train_steps + 1):
 
     if last_step:
         if master_process and args.save_checkpoint:
-            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in training_manager.optimizers])
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt")
         # the last step only has the validation loop, so break to avoid training
@@ -2121,7 +2121,7 @@ for step in range(train_steps + 1):
         inputs, targets, cum_seqlens = train_loader.send(send_args)
         (model(inputs, targets, cum_seqlens, training_manager.get_forward_args()) / grad_accum_steps).backward()
     if step in steps_to_dump:
-        gradients = {x[0] : x[1] for x in model.named_parameters()}
+        gradients = {x[0] : x[1].grad for x in model.named_parameters()}
         torch.save(gradients, f"grads_{step + 1}.pt")
 
     training_manager.step_optimizers(step)
