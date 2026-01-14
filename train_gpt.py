@@ -1452,9 +1452,10 @@ class GPT(nn.Module):
         self.scalars.label = 'scalars'
         # set learning rates
         for param in self.value_embeds.parameters():
-            param.lr_mul = 75.
+            param.lr_mul = 150.
             param.wd_mul = 5.
         for param in self.embed.parameters():
+            param.lr_mul = 150.
             param.wd_mul = 150.
         for param in self.lm_head.parameters():
             param.wd_mul = 150.
@@ -1462,6 +1463,7 @@ class GPT(nn.Module):
         self.scalars.wd_mul = 0.0
 
         self.split_embed = False
+        # self.seen_tokens = nn.Buffer(torch.zeros(vocab_size, dtype=torch.bool), persistent=False)
 
     def forward(self, input_seq: Tensor, target_seq: Tensor, seqlens: Tensor, schedule_cfg: ForwardScheduleConfig):
         assert input_seq.ndim == 1
