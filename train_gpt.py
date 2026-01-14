@@ -759,7 +759,7 @@ class DistAdam(torch.optim.Optimizer):
         param_groups = []
         for idx, label in enumerate(label_order):
             if label in params_by_label:
-                param_groups.append(dict(params=params_by_label[label], betas=betas[idx]))
+                param_groups.append(dict(params=params_by_label[label], betas=betas[idx], sparse='embed' in label))
         # include any unlabeled params at the end (processed last)
         if None in params_by_label:
             param_groups.append(dict(params=params_by_label[None]))
@@ -850,6 +850,24 @@ class DistAdam(torch.optim.Optimizer):
         update.addcmul_(p_slice, mask, value=eff_wd_t)  # update += eff_wd_t * p_slice * mask
         p_slice.add_(other=update, alpha=-1.0)  # p_slice -= update
 
+    @staticmethod
+    @torch.compile(dynamic=False, fullgraph=True)
+    def _update_step_sparse(p_slice, g_slice, exp_avg, exp_avg_sq, beta1, beta2, eps, step_size_t, eff_wd_t):
+        """Compiled Adam update step. step_size_t and eff_wd_t are 0-D CPU tensors to avoid recompilation."""
+
+        # only update rows which have non-zero values in the gradient
+        update_mask = (g_slice == 0).sum(dim=1) < g_slice.shape[1]
+
+        exp_avg[update_mask].mul_(beta1).add_(g_slice[update_mask], alpha=1 - beta1)  # exp_avg = beta1 * exp_avg + (1 - beta1) * g_slice
+        exp_avg_sq[update_mask].mul_(beta2).addcmul_(g_slice[update_mask], g_slice[update_mask], value=1 - beta2)  # exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * g_slice^2
+        # compute step
+        update = exp_avg[update_mask].div(exp_avg_sq[update_mask].sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
+        # cautious weight decay
+        mask = (update * p_slice[update_mask]) > 0
+        update.addcmul_(p_slice[update_mask], mask, value=eff_wd_t)  # update += eff_wd_t * p_slice * mask
+        p_slice[update_mask].add_(other=update, alpha=-1.0)  # p_slice -= update
+
+
     @torch.no_grad()
     def step(self, muon_opt):
         muon_opt.step_p1()
@@ -862,6 +880,7 @@ class DistAdam(torch.optim.Optimizer):
             beta1, beta2 = group['betas']
             eps = group['eps']
             wd = group['weight_decay']
+            sparse = group['sparse']
             for param in group['params']:
                 if param not in self._reduce_scatter_futures:
                     continue
@@ -887,9 +906,13 @@ class DistAdam(torch.optim.Optimizer):
                 bias1, bias2 = 1 - beta1 ** t, 1 - beta2 ** t
                 self._step_size_t.fill_(lr * (bias2 ** 0.5 / bias1))
                 self._eff_wd_t.fill_(lr * lr * wd * getattr(param, "wd_mul", 1.0)) # `lr` included twice to serve as weight decay schedule.
+                if not sparse:
+                    DistAdam._update_step(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
+                                        beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
+                else:
+                    DistAdam._update_step_sparse(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
+                                                beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
 
-                DistAdam._update_step(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
-                                      beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
 
                 if not is_small:
                     if getattr(param, "is_final_param", False):
@@ -2105,7 +2128,7 @@ for step in range(train_steps + 1):
 
     if last_step:
         if master_process and args.save_checkpoint:
-            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in optimizers])
+            log = dict(step=step, code=code, model=model.state_dict(), optimizers=[opt.state_dict() for opt in training_manager.optimizers])
             os.makedirs(f"logs/{run_id}", exist_ok=True)
             torch.save(log, f"logs/{run_id}/state_step{step:06d}.pt")
         # the last step only has the validation loop, so break to avoid training
