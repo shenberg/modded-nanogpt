@@ -425,7 +425,7 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
 # Compiled helpers for NorMuon by @chrisjmccormick
 
 @torch.compile(dynamic=False, fullgraph=True)
-def cautious_wd_and_update_inplace(p, mantissa, grad, wd_mask, wd_tensor, lr_tensor):
+def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     """
     Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors.
     Mantissa is tracked to enable higher precision updates on bfloat16 parameters.
@@ -438,7 +438,7 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_mask, wd_tensor, lr_ten
     lr_factor = lr_tensor.to(torch.float32)
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
-    p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_mask * wd_factor * lr_factor))
+    p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_factor * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
 
@@ -695,13 +695,11 @@ class NorMuon(torch.optim.Optimizer):
                 # wd_mask = torch.clamp(wd_mask, min=0.0, max=1.0).unsqueeze(red_dim).expand_as(updated_grads).view_as(param_chunk)
                 # wd_mask = (wd_mask > 0.1).unsqueeze(red_dim).expand_as(updated_grads).view_as(param_chunk)
                 # wd_mask = updated_grads.view_as(param_chunk) * param_chunk >= 0
-                wd_mask = torch.ones(1).expand_as(param_chunk)
                 for local_idx in range(num_params):
                     cautious_wd_and_update_inplace(
                         param_chunk[local_idx].view(torch.uint16),
                         mantissa[local_idx],
                         v_chunk[local_idx],
-                        wd_mask[local_idx],
                         eff_wd_cpu[local_idx],
                         eff_lr_cpu[local_idx]
                     )
