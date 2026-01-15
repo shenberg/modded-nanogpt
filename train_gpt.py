@@ -425,7 +425,7 @@ def polar_express(G: torch.Tensor, split_baddbmm: bool = False):
 # Compiled helpers for NorMuon by @chrisjmccormick
 
 @torch.compile(dynamic=False, fullgraph=True)
-def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
+def cautious_wd_and_update_inplace(p, mantissa, grad, wd_mask, wd_tensor, lr_tensor):
     """
     Cautious weight decay + parameter update. wd_tensor and lr_tensor are 0-D CPU tensors.
     Mantissa is tracked to enable higher precision updates on bfloat16 parameters.
@@ -438,9 +438,7 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     lr_factor = lr_tensor.to(torch.float32)
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
-    p_precise.copy_(p_precise - (grad * lr_factor))
-    mask = (grad * p_precise) >= 0
-    p_precise.copy_(p_precise - (p_precise * mask * wd_factor * lr_factor))
+    p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_mask * wd_factor * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
 
@@ -680,7 +678,6 @@ class NorMuon(torch.optim.Optimizer):
 
             v_chunk = v_chunk.view(grad_shape)
 
-            # # "Cautious" weight decay (https://arxiv.org/abs/2510.12402)
             updated_params = torch.empty_like(grad_chunk, dtype=torch.bfloat16)
             if num_params > 0:
                 # Work on a stacked copy to avoid touching original params
@@ -690,11 +687,14 @@ class NorMuon(torch.optim.Optimizer):
                     group["mantissa"] = torch.zeros_like(param_chunk, dtype=torch.uint16)
                 mantissa = group["mantissa"]
 
+                wd_mask = torch.linalg.vecdot(param_chunk.view_as(updated_grads), v_chunk.view_as(updated_grads), dim=red_dim) >= 0
+                wd_mask = wd_mask.expand_as(updated_grads).view(param_chunk)
                 for local_idx in range(num_params):
                     cautious_wd_and_update_inplace(
                         param_chunk[local_idx].view(torch.uint16),
                         mantissa[local_idx],
                         v_chunk[local_idx],
+                        wd_mask[local_idx],
                         eff_wd_cpu[local_idx],
                         eff_lr_cpu[local_idx]
                     )
