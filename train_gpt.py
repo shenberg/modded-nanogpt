@@ -850,10 +850,12 @@ class DistAdam(torch.optim.Optimizer):
         exp_avg.mul_(beta1).add_(g_slice, alpha=1 - beta1)  # exp_avg = beta1 * exp_avg + (1 - beta1) * g_slice
         exp_avg_sq.mul_(beta2).addcmul_(g_slice, g_slice, value=1 - beta2)  # exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * g_slice^2
         # compute step
-        update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
-        update_wd = update + p_slice*eff_wd_t
+        # update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
+        # update_wd = update + p_slice*eff_wd_t
         # update = torch.where(update*update_wd > 0, update_wd, update)
-        p_slice.add_(other=update_wd, alpha=-1.0)  # p_slice -= update
+        # p_slice.add_(other=update_wd, alpha=-1.0)  # p_slice -= update
+        p_slice.mul_(1 - eff_wd_t)
+        p_slice.addcdiv_(exp_avg, exp_avg_sq.sqrt().add_(eps), -step_size_t)
         # cautious weight decay
         # mask = (update * p_slice) > 0
         # p_slice.addcmul_(p_slice, mask, value=-eff_wd_t)  # p_slice += eff_wd_t * p_slice * mask
