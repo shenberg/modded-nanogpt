@@ -694,7 +694,8 @@ class NorMuon(torch.optim.Optimizer):
                 # wd_mask = torch.clamp((wd_mask - 0.1) / (1 - 0.1), min=0.0, max=1.0).unsqueeze(red_dim).expand_as(updated_grads).view_as(param_chunk)
                 # wd_mask = torch.clamp(wd_mask, min=0.0, max=1.0).unsqueeze(red_dim).expand_as(updated_grads).view_as(param_chunk)
                 # wd_mask = (wd_mask > 0.1).unsqueeze(red_dim).expand_as(updated_grads).view_as(param_chunk)
-                wd_mask = updated_grads.view_as(param_chunk) * param_chunk >= 0
+                # wd_mask = updated_grads.view_as(param_chunk) * param_chunk >= 0
+                wd_mask = torch.ones(1).expand_as(param_chunk)
                 for local_idx in range(num_params):
                     cautious_wd_and_update_inplace(
                         param_chunk[local_idx].view(torch.uint16),
