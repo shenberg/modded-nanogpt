@@ -688,7 +688,7 @@ class NorMuon(torch.optim.Optimizer):
                 mantissa = group["mantissa"]
 
                 wd_mask = torch.linalg.vecdot(param_chunk.view_as(updated_grads), v_chunk.view_as(updated_grads), dim=red_dim) >= 0
-                wd_mask = wd_mask.expand_as(updated_grads).view(param_chunk)
+                wd_mask = wd_mask.unsqueeze(red_dim).expand_as(updated_grads).view(param_chunk)
                 for local_idx in range(num_params):
                     cautious_wd_and_update_inplace(
                         param_chunk[local_idx].view(torch.uint16),
