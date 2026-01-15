@@ -887,6 +887,7 @@ class DistAdam(torch.optim.Optimizer):
             beta1, beta2 = group['betas']
             eps = group['eps']
             wd = group['weight_decay']
+            coupled = group['coupled']
             for param in group['params']:
                 if param not in self._reduce_scatter_futures:
                     continue
@@ -912,10 +913,12 @@ class DistAdam(torch.optim.Optimizer):
                 bias1, bias2 = 1 - beta1 ** t, 1 - beta2 ** t
                 self._step_size_t.fill_(lr * (bias2 ** 0.5 / bias1))
                 self._eff_wd_t.fill_(lr * lr * wd * getattr(param, "wd_mul", 1.0)) # `lr` included twice to serve as weight decay schedule.
-
-                DistAdam._update_step(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
-                                      beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
-
+                if not coupled:
+                    DistAdam._update_step(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
+                                        beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
+                else:
+                    DistAdam._update_step_coupled(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
+                                                beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
                 if not is_small:
                     if getattr(param, "is_final_param", False):
                         last_param = param
