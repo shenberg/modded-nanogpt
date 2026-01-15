@@ -851,10 +851,12 @@ class DistAdam(torch.optim.Optimizer):
         exp_avg_sq.mul_(beta2).addcmul_(g_slice, g_slice, value=1 - beta2)  # exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * g_slice^2
         # compute step
         update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
+        update_wd = update + p_slice*eff_wd_t
+        update = torch.where(update*update_wd > 0, update_wd, update)
         p_slice.add_(other=update, alpha=-1.0)  # p_slice -= update
         # cautious weight decay
-        mask = (update * p_slice) > 0
-        p_slice.addcmul_(p_slice, mask, value=-eff_wd_t)  # p_slice += eff_wd_t * p_slice * mask
+        # mask = (update * p_slice) > 0
+        # p_slice.addcmul_(p_slice, mask, value=-eff_wd_t)  # p_slice += eff_wd_t * p_slice * mask
 
     @torch.no_grad()
     def step(self, muon_opt):
@@ -1820,7 +1822,7 @@ class TrainingManager():
         assert set(getattr(p, 'label', None) for p in model.parameters()) == set(adam_labels + muon_labels), "All params must have label"
 
         self.adam_opt = DistAdam(adam_params, adam_labels, adam_beta_values, lr=0.008, eps=1e-10, weight_decay=0.005)
-        self.muon_opt = NorMuon(muon_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)
+        self.muon_opt = NorMuon(muon_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=0.5)
         self.optimizers = [self.adam_opt, self.muon_opt]
 
         # split after odd number step
