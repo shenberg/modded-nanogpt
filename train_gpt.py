@@ -439,7 +439,8 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
     p_precise.copy_(p_precise - (grad * lr_factor))
-    p_precise.mul_(1.0 - wd_factor * lr_factor)
+    # p_precise.mul_(1.0 - wd_factor * lr_factor)
+    p_precise.mul_(wd_factor)
     # p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_factor * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
@@ -508,6 +509,7 @@ class NorMuon(torch.optim.Optimizer):
     def reset(self):
         # expose a reset for clearing buffers
         for group in self.param_groups:
+            group["step"] = 0
             if "momentum_buffer" in group:
                 group["momentum_buffer"].zero_()
                 group["mantissa"].zero_()
@@ -525,7 +527,7 @@ class NorMuon(torch.optim.Optimizer):
         param_groups = []
         for module_name, group_params in groups.items():
             chunk_size = (len(group_params) + self.world_size - 1) // self.world_size
-            param_groups.append(dict(params=group_params, chunk_size=chunk_size))
+            param_groups.append(dict(params=group_params, chunk_size=chunk_size, step=0))
 
         return param_groups
 
@@ -545,7 +547,7 @@ class NorMuon(torch.optim.Optimizer):
         for size in group_sizes:
             chunk_size = (size + self.world_size - 1) // self.world_size
             group_params = params_list[idx: idx + size]
-            param_groups.append(dict(params=group_params, chunk_size=chunk_size))
+            param_groups.append(dict(params=group_params, chunk_size=chunk_size, step=0))
             idx += size
 
         return param_groups
@@ -657,8 +659,12 @@ class NorMuon(torch.optim.Optimizer):
                 group["param_lr_cpu"] = torch.tensor(lr_mults, dtype=torch.float32, device="cpu")
                 group["param_wd_cpu"] = torch.tensor(wd_mults, dtype=torch.float32, device="cpu")
 
+            group["step"] += 1
+            t = group["step"]
+            bias1, bias2 = 1 - group["momentum"] ** t, 1 - group["beta2"] ** t
+
             eff_lr_all = group["param_lr_cpu"] * group["lr"]
-            eff_wd_all = group["param_wd_cpu"] * group["weight_decay"] * group["lr"]
+            eff_wd_all = 1.0 - eff_lr_all * group["param_wd_cpu"] * group["weight_decay"] * group["lr"]
 
             # Slice the portion corresponding to this rank's shard
             eff_lr_cpu = eff_lr_all[module_idx:module_idx + num_params]
