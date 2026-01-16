@@ -438,7 +438,9 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     lr_factor = lr_tensor.to(torch.float32)
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
-    p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_factor * lr_factor))
+    p_precise.copy_(p_precise - (grad * lr_factor))
+    p_precise.mul_(1.0 - wd_factor * lr_factor)
+    # p_precise.copy_(p_precise - (grad * lr_factor) - (p_precise * wd_factor * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
 
@@ -854,8 +856,8 @@ class DistAdam(torch.optim.Optimizer):
         # update_wd = update + p_slice*eff_wd_t
         # update = torch.where(update*update_wd > 0, update_wd, update)
         # p_slice.add_(other=update_wd, alpha=-1.0)  # p_slice -= update
-        p_slice.mul_(1 - eff_wd_t)
         p_slice.addcdiv_((-step_size_t)*exp_avg, exp_avg_sq.sqrt().add_(eps), )
+        p_slice.mul_(eff_wd_t)
         # cautious weight decay
         # mask = (update * p_slice) > 0
         # p_slice.addcmul_(p_slice, mask, value=-eff_wd_t)  # p_slice += eff_wd_t * p_slice * mask
@@ -896,7 +898,7 @@ class DistAdam(torch.optim.Optimizer):
                 # `.fill_(value)` is the same as "= value", but doesn't change the tensor object.
                 bias1, bias2 = 1 - beta1 ** t, 1 - beta2 ** t
                 self._step_size_t.fill_(lr * (bias2 ** 0.5 / bias1))
-                self._eff_wd_t.fill_(lr * lr * wd * getattr(param, "wd_mul", 1.0)) # `lr` included twice to serve as weight decay schedule.
+                self._eff_wd_t.fill_(1.0 - lr * lr * wd * getattr(param, "wd_mul", 1.0)) # `lr` included twice to serve as weight decay schedule.
 
                 DistAdam._update_step(p_slice, g_slice, state["exp_avg"], state["exp_avg_sq"],
                                       beta1, beta2, eps, self._step_size_t, self._eff_wd_t)
