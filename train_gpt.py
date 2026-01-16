@@ -665,6 +665,7 @@ class NorMuon(torch.optim.Optimizer):
 
             eff_lr_all = group["param_lr_cpu"] * group["lr"]
             eff_wd_all = 1.0 - eff_lr_all * group["param_wd_cpu"] * group["weight_decay"] * group["lr"]
+            eff_lr_all.mul_(bias2 ** 0.5 / bias1)
 
             # Slice the portion corresponding to this rank's shard
             eff_lr_cpu = eff_lr_all[module_idx:module_idx + num_params]
