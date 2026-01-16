@@ -438,14 +438,13 @@ def cautious_wd_and_update_inplace(p, mantissa, grad, wd_tensor, lr_tensor):
     lr_factor = lr_tensor.to(torch.float32)
     p_precise_raw = (p.to(torch.uint32) << 16) | mantissa.to(torch.uint32)
     p_precise = p_precise_raw.view(torch.float32)
-    mask = (grad * p_precise) >= 0
-    p_precise.copy_(p_precise - (p_precise * mask * wd_factor * lr_factor) - (grad * lr_factor))
+    p_precise.copy_(p_precise - (p_precise * wd_factor * lr_factor) - (grad * lr_factor))
     p.copy_((p_precise_raw >> 16).to(torch.uint16))
     mantissa.copy_(p_precise_raw.to(torch.uint16))
 
 @torch.compile(dynamic=False, fullgraph=True)
 def apply_normuon_variance_reduction(v_chunk, second_momentum_buffer, beta2, red_dim):
-    """NorMuon variance reduction. Algebraically fuses the normalization steps to minimize memory ops."""
+    """NorMuon variance reduction. Algebraically fuse`s the normalization steps to minimize memory ops."""
     v_mean = v_chunk.float().square().mean(dim=red_dim, keepdim=True)
     red_dim_size = v_chunk.size(red_dim)
     v_norm_sq = v_mean.sum(dim=(-2, -1), keepdim=True).mul_(red_dim_size)
@@ -846,8 +845,7 @@ class DistAdam(torch.optim.Optimizer):
         # compute step
         update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
         # cautious weight decay
-        mask = (update * p_slice) > 0
-        update.addcmul_(p_slice, mask, value=eff_wd_t)  # update += eff_wd_t * p_slice * mask
+        update.add_(p_slice, alpha=eff_wd_t)  # update += eff_wd_t * p_slice * mask
         p_slice.add_(other=update, alpha=-1.0)  # p_slice -= update
 
     @torch.no_grad()
@@ -1813,8 +1811,8 @@ class TrainingManager():
         muon_params = [p for p in model.parameters() if getattr(p, 'label', None) in muon_labels]
         assert set(getattr(p, 'label', None) for p in model.parameters()) == set(adam_labels + muon_labels), "All params must have label"
 
-        self.adam_opt = DistAdam(adam_params, adam_labels, adam_beta_values, lr=0.008, eps=1e-10, weight_decay=0.005)
-        self.muon_opt = NorMuon(muon_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=1.2)
+        self.adam_opt = DistAdam(adam_params, adam_labels, adam_beta_values, lr=0.008, eps=1e-10, weight_decay=0.002)
+        self.muon_opt = NorMuon(muon_params, lr=0.023, momentum=0.95, beta2=0.95, weight_decay=0.5)
         self.optimizers = [self.adam_opt, self.muon_opt]
 
         # split after odd number step
