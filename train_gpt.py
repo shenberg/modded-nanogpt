@@ -774,7 +774,7 @@ class DistAdam(torch.optim.Optimizer):
         for p in params:
             chunk = p if p.numel() < 1024 else p[:p.size(0) // self.world_size]
             exp_avg = torch.zeros_like(chunk, dtype=torch.float32, device=p.device)
-            exp_avg_sq = torch.zeros_like(exp_avg) if 'embed' not in getattr(p, 'label', '') else torch.zeros(chunk.shape[1], dtype=torch.float32, device=p.device)
+            exp_avg_sq = torch.zeros_like(exp_avg) if 'embed' not in getattr(p, 'label', '') else torch.zeros(chunk.shape[0], dtype=torch.float32, device=p.device)
             self.state[p] = dict(step=0, exp_avg=exp_avg, exp_avg_sq=exp_avg_sq)
 
         # tag the final param for optimizer pipelining, run all gather after muon copy
@@ -841,7 +841,7 @@ class DistAdam(torch.optim.Optimizer):
         embed_state = self.state[embed]
         embed_state['step'] = lm_head_state['step']
         embed_state['exp_avg'] = lm_head_state['exp_avg'].clone()
-        embed_state['exp_avg_sq'] = lm_head_state['exp_avg_sq'].clone().mean(dim=0)
+        embed_state['exp_avg_sq'] = lm_head_state['exp_avg_sq'].clone().mean(dim=-1)
         embed.data.copy_(lm_head.data)
 
     @staticmethod
@@ -866,14 +866,14 @@ class DistAdam(torch.optim.Optimizer):
         """Compiled Adam update step. step_size_t and eff_wd_t are 0-D CPU tensors to avoid recompilation."""
         exp_avg.mul_(beta1).add_(g_slice, alpha=1 - beta1)  # exp_avg = beta1 * exp_avg + (1 - beta1) * g_slice
         # exp_avg_sq.mul_(beta2).addcmul_(g_slice, g_slice, value=1 - beta2)  # exp_avg_sq = beta2 * exp_avg_sq + (1 - beta2) * g_slice^2
-        exp_avg_sq.lerp_(g_slice.float().square().mean(dim=0).to(exp_avg_sq.dtype), 1 - beta2)
+        exp_avg_sq.lerp_(g_slice.float().square().mean(dim=-1).to(exp_avg_sq.dtype), 1 - beta2)
         # compute step
         # update = exp_avg.div(exp_avg_sq.sqrt().add_(eps)).mul_(step_size_t)  # update = (exp_avg / (sqrt(exp_avg_sq) + eps)) * step_size
         # update_wd = update + p_slice*eff_wd_t
         # update = torch.where(update*update_wd > 0, update_wd, update)
         # p_slice.add_(other=update_wd, alpha=-1.0)  # p_slice -= update
         p_slice.mul_(1 - eff_wd_t)
-        p_slice.addcdiv_((-step_size_t)*exp_avg, exp_avg_sq.sqrt().add_(eps).unsqueeze(0), )
+        p_slice.addcdiv_((-step_size_t)*exp_avg, exp_avg_sq.sqrt().add_(eps).unsqueeze(-1), )
 
     @torch.no_grad()
     def step(self, muon_opt):
